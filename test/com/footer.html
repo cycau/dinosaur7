@@ -1,0 +1,22 @@
+<div>
+  <h1>FOOTER</h1>
+  <span _ibv="footerText"></span>
+  <button onclick="_d7.eventFooterXXX();">FOOTERBtn</button>
+</div>
+
+<script type="application/javascript" eventbind>
+  console.info("footer.eventbind start");
+
+  _d7.eventFooterXXX = function () {
+    console.info("footer.eventFooterXXX");
+  }
+  _d7.render();
+
+  console.info("footer.eventbind end");
+</script>
+<script type="application/javascript">
+    function footerLoad() {
+      console.info("footer.loading...");
+    }
+    footerLoad();
+</script>
