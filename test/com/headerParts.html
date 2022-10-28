@@ -1,0 +1,20 @@
+<div>
+  <h1>HEADER PARTS</h1>
+  <span _ibv="headText"></span>
+  <button onclick="_d7.eventHeaderParts();">HEADER PARTS Btn</button>
+</div>
+
+<script type="application/javascript" eventbind>
+  console.info("header parts start");
+
+  _d7.eventHeaderParts = function() {
+    console.info("header.eventHeaderParts ok.");
+  };
+
+  _d7.onload(function() {
+    console.info("header parts onload ok.");
+    this.render();
+  })
+
+  console.info("header parts end");
+</script>
