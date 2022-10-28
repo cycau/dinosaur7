@@ -1,0 +1,21 @@
+<div>
+  <h1>HEADER</h1>
+  <span _d7v="_m.val1">header span</span>
+  <button onclick="_d7.eventHeader();">HEADER Btn</button>
+</div>
+<div tpltsrc="/com/headerParts.html">wait header parts</div>
+
+<script type="application/javascript" eventbind>
+  console.info("header start");
+
+  _d7.eventHeader = function() {
+    console.info("header.eventHeader ok.");
+  };
+
+  _d7.onload(function() {
+    console.info("header onload ok." + this.params.val1);
+    this.render(this.params);
+  })
+
+  console.info("header end");
+</script>
