@@ -5,7 +5,7 @@ let _d7Mode = 'dev';
  * @author cycauo@gmail.com
  * @version 1.0
  * The name [Dinosaur7] comes from that
- * my daughter likes dinosaurs very much and she is 7 years old.
+ * my daughter likes dinosaurs very much when she is 7 years old.
  *
  * Dinosaur7's all symbol in html
  *   [_d7] 		if | for | DUMMY.
