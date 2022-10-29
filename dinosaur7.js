@@ -1,19 +1,23 @@
 let _d7Mode = 'dev';
 /***
+ * @author Dinosaur7
+ * @author kougen.sai
+ * @author cycauo@gmail.com
+ * @version 1.0
  * The name [Dinosaur7] comes from that
  * my daughter likes dinosaurs very much and she is 7 years old.
- * 
- * Dinosaur7's all symbol in html
- *   [_d7] 		if | for | DUMMY
- *   [_d7v] 	show ModelData to html
- *   [_d7m] 	collect html value to ModelData
- *   [tpltsrc] 	specify external html resource of template
- *   [tpltseq] 	specify loading priority of template
- *   [mainpage] specify main block
  *
- *   {% javascript logic %}
- *   {# print value #}
- *   {@ print value with encode @}
+ * Dinosaur7's all symbol in html
+ *   [_d7] 		if | for | DUMMY.
+ *   [_d7v] 	show Model data to html.
+ *   [_d7m] 	collect html value to Model data.
+ *   [compsrc] 	specify external html resource of template.
+ *   [compseq] 	loading priority of template, specify this will load in synchronize mode.
+ *   [mainblock] to specify main page content.
+ *
+ *   {%  javascript logic %}
+ *   {%= print value %}
+ *   {%=<print value with encode %}
  *
  * Dinosaur7's all method
  *   fn.onload(function)
@@ -59,22 +63,22 @@ let _d7Mode = 'dev';
 	}
 
 	class Dinosaur7 {
-		constructor(name, tpltBlock, params) {
-			this.fullname = name;
+		constructor(fullname, params) {
+			this.fullname = fullname;
 			this.params = params;
 			this._PRIVATE = {};
-			this._PRIVATE.CACHE = {fRender:{}}; // cache compiled function
 			this.childseq = 0;
 			this.children = {};
-	
-			if (tpltBlock) {
-				tpltBlock.setAttribute('_d7name', name);
-				tpltBlock.querySelectorAll("[_d7=DUMMY]").forEach(function(dummyBlock) {
+			this._CACHE = {funcRender:{}}; // cache compiled function
+
+			this.assignBlock = function(tarBlock) {
+				tarBlock.setAttribute('_d7name', fullname);
+				tarBlock.querySelectorAll("[_d7=DUMMY]").forEach(function(dummyBlock) {
 					dummyBlock.remove();
 				})
-				this._PRIVATE.ROOT = tpltBlock;
+				this._PRIVATE.ROOT = tarBlock;
 				this._PRIVATE.TPLT = document.createElement("div");
-				this._PRIVATE.TPLT.innerHTML = tpltBlock.innerHTML;
+				this._PRIVATE.TPLT.innerHTML = tarBlock.innerHTML;
 			}
 		}
 	}
@@ -82,20 +86,21 @@ let _d7Mode = 'dev';
 	/********************************************************************
 	 * CONSTANT
 	/********************************************************************/
-	const _LOGIC = {	// <% logic %> 				describe logic
-		start: "{%",	// <% =varOrFunction %> 	describe output
-		close: "%}",	// <% =<varOrFunction %> 	encode and output
+	const _LOGIC = {	// {% logic %} 				describe logic
+		start: "{%",	// {% =varOrFunction %} 	describe output
+		close: "%}",	// {% =<varOrFunction %} 	encode and output
 	}
 	const _ENCODE = {
 		"<": "&#60;", 
 		">": "&#62;", 
+		"&": "&#26;", 
 		'"': "&#34;", 
 		"'": "&#39;", 
 		"/": "&#47;",
-		" ": "?",
-		"\t": "?",
-		"\n": "?",
-		"\r\n": "?",
+		" ": "&#20;", //&emsp;
+		"\t": "&#09;",
+		"\n": "&#a0;",
+		"\r": "&#d0;",
 	};
 	const _TYPECONTAINER = {
 		"CAPTION": "table", 
@@ -124,6 +129,111 @@ let _d7Mode = 'dev';
 	 *   if (condition) xxx; yyy; zzz; => if (condition) {xxx; yyy; zzz;
 	 *   for(condition) xxx; yyy; zzz; => for(condition) {xxx; yyy; zzz;
 	/*********************************************************************/
+	const buildBlock = function(selector) {
+		if (!selector) selector = "_d7Root"
+		if (this._CACHE.funcRender[selector]) return this._CACHE.funcRender[selector];
+
+		var tplts = this._PRIVATE.TPLT.querySelectorAll(selector);
+		if (selector === "_d7Root") {
+			tplts = [this._PRIVATE.TPLT];
+		}
+		if (tplts.length < 1) {
+			error("not found template area with selector [" + selector + "]");
+			return;
+		}
+		if (tplts.length > 2) {
+			error("only one template area is allowed, but there is " + tplts.length + " with selector[" + selector + "]");
+			return;
+		}
+		if (tplts[0].hasAttribute("_d7")) {
+			error("can't specify attribute [_d7] in root element.");
+			return;
+		}
+
+		var markedHtml = normalizeCompileMark(tplts[0].outerHTML);
+		var renderFunc = makeRenderFunc(markedHtml);
+		this._CACHE.funcRender[selector] = renderFunc
+		return renderFunc;
+	}
+	const normalizeCompileMark = function(strHtml) {
+
+		/***
+		 * ロジックマーク正規化
+		 * ロジック前後にに<!-- -->を追加する（html escape防止）
+		 */
+		var RegStart = new RegExp("(<!\\-\\-\\s*)?(" + _LOGIC.start + ")", "gm");
+		var RegClose = new RegExp("(" + _LOGIC.close + ")(\\s*\\-\\->)?", "gm");
+		strHtml = strHtml.replace(RegStart, function (m, cmtStart, start) {return "<!-- " + start;})
+		strHtml = strHtml.replace(RegClose, function (m, close, cmtClose) {return close + " -->";})
+		var divTemp = document.createElement("div");
+		divTemp.innerHTML = strHtml;
+
+
+		/***
+		 * _d7プロパティ展開
+		 * if, for
+		 */
+		var logic = {};
+		var logicKey; var idx = 0; var prefix = "_d7L0Gic"; 
+		divTemp.querySelectorAll("[_d7]").forEach(function(d7Tag) {
+			var expr = d7Tag.getAttribute("_d7").trim();
+
+			d7Tag.removeAttribute("_d7");
+			var block = analyzeD7(expr);
+			if (block.start) {
+				logicKey = prefix + (++idx) + "E";
+				logic[logicKey] = _LOGIC.start + " " + block.start + " " + _LOGIC.close;
+				d7Tag.before(logicKey);
+			}
+
+			if (block.close) {
+				logicKey = prefix + (++idx) + "E";
+				logic[logicKey] = _LOGIC.start + " " + block.close + " " + _LOGIC.close;
+				d7Tag.after(logicKey);
+			}
+		})
+
+		/***
+		 * _d7vプロパティ簡略表記[.]展開
+		 */
+		divTemp.querySelectorAll("[_d7v]").forEach(function(d7vTag) {
+			var d7v = d7vTag.getAttribute('_d7v');
+			if(!d7v.endsWith(".")) return;
+			if(!d7v.startsWith("_m.") && !d7v.startsWith("=m.")) return;
+
+			expandD7v(d7vTag, d7v);
+		})
+		/***
+		 * _d7vプロパティ展開
+		 * <span _d7v="=m.key1.key[idx].val,attr"></span>
+		 * <span _d7v="=m.key1.key[idx].val,attr" _d7vi="{% _c.push(_m.key1.key[idx].val) %}{# _c.size()-1 #}" _d7m="{# `key1.key[${idx}].val` #}"></span>
+		 */
+		divTemp.querySelectorAll("[_d7v]").forEach(function(d7vTag) {
+			var d7v = d7vTag.getAttribute('_d7v');
+
+			if (d7v.startsWith("=m.")) {
+				d7vTag.setAttribute('_d7vi', `${_LOGIC.start}_c.push(_m.${d7v.substring(3)})${_LOGIC.close}${_LOGIC.start}=_c.length-1${_LOGIC.close}`);
+			} else {
+				d7vTag.setAttribute('_d7vi', `${_LOGIC.start}_c.push(${d7v})                ${_LOGIC.close}${_LOGIC.start}=_c.length-1${_LOGIC.close}`);
+			}
+			// 双方向、かつ_d7m定義されてない場合
+			if (d7v.startsWith("=m.") && !d7vTag.hasAttribute("_d7m")) {
+				var d7m = d7v.substring(3);
+				d7m = d7m.replaceAll("[", "[${");
+				d7m = d7m.replaceAll("]", "}]");
+				d7vTag.setAttribute('_d7m', _LOGIC.start + "=`" + d7m + "`" + _LOGIC.close);
+			}
+		})
+		/***
+		 * _d7プロパティ展開
+		 * 上でのロジックを書き換え
+		 */
+		strHtml = divTemp.innerHTML;
+		for (logicKey in logic) {
+			strHtml = strHtml.replace(logicKey, logic[logicKey]);
+		}
+		return strHtml;
+	}
 	const analyzeD7 = function(expr) {
 		if (expr.match(/^if\(.*?\)\s+(continue|break)/)) {
 			return {start: expr};
@@ -166,89 +276,6 @@ let _d7Mode = 'dev';
 			expandD7v(child, prefix);
 		})
 	}
-	const normalizeCompileMark = function(strHtml) {
-
-		/***
-		 * ロジックマーク正規化
-		 * ロジック前後にに<!-- -->を追加する（html escape防止）
-		 */
-		var RegStart = new RegExp("(<!\\-\\-\\s*)?(" + _LOGIC.start + ")", "g");
-		var RegClose = new RegExp("(" + _LOGIC.close + ")(\\s*\\-\\->)?", "g");
-		strHtml = strHtml.replace(/^\s+|\s+$/gm, ""); // 前後スペース
-		strHtml = strHtml.replace(RegStart, function (m, cmtStart, start) {return "<!-- " + start;})
-		strHtml = strHtml.replace(RegClose, function (m, close, cmtClose) {return close + " -->";})
-		var divTemp = document.createElement("div");
-		divTemp.innerHTML = strHtml;
-
-
-		/***
-		 * _d7プロパティ展開
-		 * if, for
-		 */
-		var logic = {};
-		var logicKey; var idx = 0; var prefix = "_d7L0Gic"; 
-		divTemp.querySelectorAll("[_d7]").forEach(function(d7Tag) {
-			var expr = d7Tag.getAttribute("_d7").trim();
-
-			d7Tag.removeAttribute("_d7");
-			var block = analyzeD7(expr);
-			if (block.start) {
-				logicKey = prefix + (++idx) + "E";
-				//d7Tag.before(encodeURIComponent(_ENCLOSER.logicStart + " " + block.start + " " + _ENCLOSER.logicClose));
-				logic[logicKey] = _LOGIC.start + " " + block.start + " " + _LOGIC.close;
-				d7Tag.before(logicKey);
-			}
-
-			if (block.close) {
-				logicKey = prefix + (++idx) + "E";
-				//d7Tag.after(encodeURIComponent(_ENCLOSER.logicStart + " " + block.close + " " + _ENCLOSER.logicClose));
-				logic[logicKey] = _LOGIC.start + " " + block.close + " " + _LOGIC.close;
-				d7Tag.after(logicKey);
-			}
-		})
-
-		/***
-		 * _d7vプロパティ簡略表記[.]展開
-		 */
-		divTemp.querySelectorAll("[_d7v]").forEach(function(d7vTag) {
-			var d7v = d7vTag.getAttribute('_d7v');
-			if(!d7v.endsWith(".")) return;
-			if(!d7v.startsWith("_m.") && !d7v.startsWith("=m.")) return;
-
-			expandD7v(d7vTag, d7v);
-		})
-		/***
-		 * _d7vプロパティ展開
-		 * <span _d7v="=m.key1.key[idx].val,attr"></span>
-		 * <span _d7v="=m.key1.key[idx].val,attr" _d7vi="{% _c.push(_m.key1.key[idx].val) %}{# _c.size()-1 #}" _d7m="{# `key1.key[${idx}].val` #}"></span>
-		 */
-		divTemp.querySelectorAll("[_d7v]").forEach(function(d7vTag) {
-			var d7v = d7vTag.getAttribute('_d7v');
-
-			if (d7v.startsWith("=m.")) {
-				d7vTag.setAttribute('_d7vi', `{% _c.push(_m.${d7v.substring(3)}) %}{# _c.length-1 #}`);
-			} else {
-				d7vTag.setAttribute('_d7vi', `{% _c.push(${d7v}) %}{# _c.length-1 #}`);
-			}
-			// 双方向、かつ_d7m定義されてない場合
-			if (d7v.startsWith("=m.") && !d7vTag.hasAttribute("_d7m")) {
-				var d7m = d7v.substring(3);
-				d7m = d7m.replaceAll("[", "[${");
-				d7m = d7m.replaceAll("]", "}]");
-				d7m = "{# `" + d7m + "` #}";
-				d7vTag.setAttribute('_d7m', d7m);
-			}
-		})
-		/***
-		 * _d7プロパティ展開
-		 * 上でのロジックを書き換え
-		 */
-		strHtml = divTemp.innerHTML;
-		for (logicKey in logic) {
-			strHtml = strHtml.replace(logicKey, logic[logicKey]);
-		}
-		return strHtml;
-	}
 	const makeRenderFunc = function (strHtml) {
 
 		var regstr;
@@ -257,69 +284,110 @@ let _d7Mode = 'dev';
 		regstr += "([\\s\\S]*?)";
 		regstr += "(" + _LOGIC.close + ")";
 		regstr += "(\\s*\\-\\->)?";
-		
-		strHtml = strHtml.replace(/'/g, "\\'"); // 一回全部escapeして、下でロジック部のみ還元
-		// start closeは表記上ネストすることはない！
-		var tpl = strHtml.replace(new RegExp(regstr, "gm"), function (m, cmtStar, start, expr, close, cmtClose) {
+
+		strHtml = strHtml.replace(/[\r\n]/g, "").replace(/'/g, "\\'"); // escape all ' first and recover in below.
+		var tpl = strHtml.replace(new RegExp(regstr, "gm"), function (m, cmtoutStart, start, expr, close, cmtoutClose) {
 				expr = expr.trim();
 				if (expr.startsWith("=<")) {
-					return "'.replaceAll('_d7.', this.fullname + '.') + this.util.encodeHtml(" + expr.replace(/\'/gm, "'") + ") + '";
+					expr = expr.substring(2);
+					return "'.replaceAll('_d7.', _d7name + '.') + this.util.encodeHtml(" + expr.replace(/\'/gm, "'") + ") + '";
 				}
 				if (expr.startsWith("=")) {
-					return "'.replaceAll('_d7.', this.fullname + '.') + (" + expr.replace(/\'/gm, "'") + ") + '";
+					expr = expr.substring(1);
+					return "'.replaceAll('_d7.', _d7name + '.') + (" + expr.replace(/\'/gm, "'") + ") + '";
 				}
-				return "'.replaceAll('_d7.', this.fullname + '.');" + expr.replace(/\'/gm, "'") + "; out+='";
+				return "'.replaceAll('_d7.', _d7name + '.');" + expr.replace(/\'/gm, "'") + "; out+='";
 			});
 
-		tpl = "var out=''; out+='" + tpl + "'.replaceAll('_d7.', this.fullname + '.'); return out;";
+		tpl = "var out=''; out+='" + tpl + "'.replaceAll('_d7.', _d7name + '.'); return out;";
 
-		return new Function("_m", "_c", tpl);
+		try {
+			return new Function("_m", "_c", "_d7name", tpl);
+		} catch(e) {
+		    error(e.message + '\n' + tpl);
+		}
 	};
-	const buildBlock = function(selector) {
-		if (!selector) selector = "_d7Root"
-		if (this._PRIVATE.CACHE.fRender[selector]) return this._PRIVATE.CACHE.fRender[selector];
-
-		var tplts = this._PRIVATE.TPLT.querySelectorAll(selector);
-		if (selector === "_d7Root") {
-			tplts = [this._PRIVATE.TPLT];
-		}
-		if (tplts.length < 1) {
-			error("not found template area with selector [" + selector + "]");
-			return;
-		}
-		if (tplts.length > 2) {
-			error("only one template area is allowed, but there is " + tplts.length + " with selector[" + selector + "]");
-			return;
-		}
-		if (tplts[0].hasAttribute("_d7")) {
-			error("can't specify attribute [_d7] in root element.");
-			return;
-		}
-
-		var markedHtml = normalizeCompileMark(tplts[0].outerHTML);
-		var renderFunc = makeRenderFunc(markedHtml);
-		this._PRIVATE.CACHE.fRender[selector] = renderFunc
-		return renderFunc;
-	}
-
 	/*********************************************************************
-	 * load external resouce as html template
+	 * load external component as html template
 	 * also run javascript when contains it.
-	 * example) <span tpltsrc='/view/pageA.html' tpltseq='1'></span>
+	 * example) <span compsrc='/view/pageA.html' compseq='1'></span>
 	/*********************************************************************/
+	const _CACHE_COMP = {};
+	const createComp = function(currD7, params) {
+		currD7.childseq++;
+		var childName = currD7.fullname + '.children.c' + currD7.childseq;
+		var child = new Dinosaur7(childName, params);
+		currD7.children['c'+currD7.childseq] = child;
+		return child;
+	}
+	const deleteComp = function(fullname) {
+		var _d7temp = _d7;
+		var _d7path = fullname.split('.');
+		for (var idx=1; idx<(_d7path.length-1); idx++) {
+			_d7temp = _d7temp[_d7path[idx]];
+		}
+		delete _d7temp[_d7path[_d7path.length-1]];
+
+		document.querySelectorAll('[_d7namesrc]').forEach(function(tag) {
+			// remove css or script even children's'.
+			if (tag.getAttribute('_d7namesrc').startsWith(fullname)) {
+				tag.remove();
+			}
+		});
+	}
+	const loadExComp = function(compTag, params) {
+		var _d7name = compTag.getAttribute('_d7name');
+		if (_d7name) deleteComp(_d7name);
+
+		var compUrl = compTag.getAttribute('compsrc');
+		if (!params) params = Dinosaur7.prototype.util.queryMap(compUrl);
+		var _d7Comp = createComp(this, params);
+
+		if (_CACHE_COMP[compUrl]) {
+			return renderComp(compTag, _CACHE_COMP[compUrl], _d7Comp);
+		}
+
+		var synch = compTag.hasAttribute('compseq') ? true : false;
+		var request = new XMLHttpRequest();
+		request.open('GET', compUrl, !synch);
+		if(synch) {
+			request.send(null);
+			if (request.status === 200) {
+				var template = _CACHE_COMP[compUrl] = makeTemplate(request.responseText);
+				return renderComp(compTag, template, _d7Comp);
+			} else {
+				error(`http: ${compUrl} status[${request.status}]`);
+			}
+			return null;
+		}
+
+		request.onload = function() {
+			if (request.status == 200) {
+				var template = _CACHE_COMP[compUrl] = makeTemplate(request.responseText);
+				renderComp(compTag, template, _d7Comp);
+			} else {
+				error(`http: ${compUrl} status[${request.status}]`);
+			}
+		}
+		request.onerror = function() {
+			error(`http: ${compUrl} status[${request.status}]`);
+		}
+		request.send(null);
+		return null;
+	}
 	const CSS_TAGS = [];
 	const SCRIPT_TAGS = [];
-	const splitTplt = function(strHtml) {
+	const makeTemplate = function(strHtml) {
 		var divTemp = document.createElement("div");
 		divTemp.innerHTML = strHtml;
-		var cssTemp = "";
+		var cssCode = "";
 		var cssTags = [];
-		var scriptTemp = "";
+		var scriptCode = "";
 		var scriptTags = [];
 
 		// css
 		divTemp.querySelectorAll('style').forEach(function(css) {
-			cssTemp += css.innerHTML + "\n;\n/*******-.-*******/\n;"
+			cssCode += css.innerHTML + "\n\n\n"
 			css.remove();
 		})
 		divTemp.querySelectorAll('[rel="stylesheet"]').forEach(function(css) {
@@ -339,113 +407,61 @@ let _d7Mode = 'dev';
 					SCRIPT_TAGS.push(src);
 				}
 			} else {
-				scriptTemp += script.innerHTML + "\n;\n/*******-.-*******/\n;"
+				scriptCode += script.innerHTML + "\n;\n;\n;"
 			}
 			script.remove();
 		})
 
-		var mainpage = divTemp.querySelector('mainpage');
-		if (!mainpage) mainpage = divTemp.querySelector('[mainpage]');
-		if (mainpage) {
-			strHtml = mainpage.innerHTML;
-		} else {
-			strHtml = divTemp.innerHTML;
-		}
+		var mainblock = divTemp.querySelector('mainblock');
+		if (!mainblock) mainblock = divTemp.querySelector('[mainblock]');
+		if (mainblock) 	strHtml = mainblock.innerHTML;
+		else 			strHtml = divTemp.innerHTML;
 
 		return {
 			html: strHtml,
-			css: cssTemp,
+			css: cssCode,
 			cssTags: cssTags,
-			script: scriptTemp,
+			script: scriptCode,
 			scriptTags: scriptTags
 		};
 	}
-	let _d7tpltid = 1000;
-	const renderTplt = function(tarTag, tplt, params) {
-		var tpltid = _d7tpltid++;
+	const renderComp = function(compTag, template, d7Comp) {
 
-		// HTML 追加
-		tarTag.innerHTML = tplt.html.replaceAll('_d7.', `_d7_${tpltid}.`);
-		tarTag.setAttribute('tpltid', tpltid);
+		compTag.innerHTML = template.html;
 
 		var headTag = document.querySelector('head');
-		for (var idx in tplt.cssTags) {
+		for (var idx in template.cssTags) {
 			var newTag = document.createElement('link');
 			newTag.type = 'text/css';
 			newTag.setAttribute('rel', 'stylesheet');
-			newTag.setAttribute('href', tplt.cssTags[idx]);
-			newTag.setAttribute('srctpltid', tpltid);
+			newTag.setAttribute('href', template.cssTags[idx]);
+			newTag.setAttribute('_d7namesrc', d7Comp.fullname);
 			headTag.appendChild(newTag);
 		}
-		if (tplt.css) {
+		if (template.css) {
 			var newTag = document.createElement('style');
 			newTag.type = 'text/css';
-			newTag.innerHTML = tplt.css;
-			newTag.setAttribute('srctpltid', tpltid);
+			newTag.innerHTML = template.css;
+			newTag.setAttribute('_d7namesrc', d7Comp.fullname);
 			headTag.appendChild(newTag);
 		}
-		for (var idx in tplt.scriptTags) {
+		for (var idx in template.scriptTags) {
 			var newTag = document.createElement('script');
 			newTag.type = 'text/javascript';
-			newTag.setAttribute('src', tplt.scriptTags[idx]);
-			newTag.setAttribute('srctpltid', tpltid);
+			newTag.setAttribute('src', template.scriptTags[idx]);
+			newTag.setAttribute('_d7namesrc', d7Comp.fullname);
 			headTag.appendChild(newTag);
-			//var orgScripts = document.querySelectorAll('script[src]');
-			//var lastScript = orgScripts[orgScripts.length-1];
-			//lastScript.parentNode.insertBefore(newTag, lastScript.nextSibling);
-		}
-		//再ロードやめる
-		//tplt.css = '';
-		//tplt.cssTags = [];
-		//tplt.scriptTags = [];
-
-		if (!params) params = Dinosaur7.prototype.util.queryMap(tarTag.getAttribute('tpltsrc'));
-		var _d7New = new Dinosaur7(tarTag, params);
-		publish(_d7New, `_d7_${tpltid}`);
-		(new Function("_d7", tplt.script))(_d7New);
-
-		return _d7New; // only when synch mode!
-	}
-	const _CACHE_TPLT = {};
-	const loadExTplt = function(tpltTag, params) {
-		var tpltid = tpltTag.getAttribute('tpltid');
-		document.querySelectorAll(`[srctpltid="${tpltid}"]`).forEach(function(tag) {
-			tag.remove();
-		});
-
-		var tpltUrl = tpltTag.getAttribute('tpltsrc');
-		if (_CACHE_TPLT[tpltUrl]) {
-			return renderTplt(tpltTag, _CACHE_TPLT[tpltUrl], params);
 		}
 
-		var asynch = tpltTag.hasAttribute('tpltseq') ? false : true;
-		var request = new XMLHttpRequest();
-		request.open('GET', tpltUrl, asynch);
-		// 非同期
-		if (asynch) {
-			request.onload = function() {
-				if (request.status == 200) {
-					var tplt = _CACHE_TPLT[tpltUrl] = splitTplt(request.responseText);
-					renderTplt(tpltTag, tplt, params);
-				} else {
-					error(`http: ${tpltUrl} status[${request.status}]`);
-				}
+		d7Comp.assignBlock(compTag);
+		(new Function("_d7", template.script))(d7Comp);
+		if (typeof d7Comp._funcOnload !== 'function') {
+			if (d7Comp.notRenderYet) {
+				d7Comp.show(true);
 			}
-			request.onerror = function() {
-				error(`http: ${tpltUrl} status[${request.status}]`);
-			}
-			request.send(null);
-			return null;
 		}
 
-		// 同期
-		request.send(null);
-		if (request.status === 200) {
-			var tplt = _CACHE_TPLT[tpltUrl] = splitTplt(request.responseText);
-			return renderTplt(tpltTag, tplt, params);
-		} else {
-			error(`http: ${tpltUrl} status[${request.status}]`);
-		}
+		return d7Comp; // only when synch mode!
 	}
 	/*********************************************************************
 	 * model. collect html attribute[_d7m]'s value as Map.
@@ -643,7 +659,7 @@ let _d7Mode = 'dev';
 			htmlContainer = tempTag;
 		}
 		var valContainer = [];
-		htmlContainer.innerHTML = buildBlock.call(this, blockSelector)(modelData || {}, valContainer);
+		htmlContainer.innerHTML = buildBlock.call(this, blockSelector)(modelData || {}, valContainer, this.fullname);
 
 		// データを埋め込む
 		htmlContainer.querySelectorAll("[_d7v]").forEach(function(d7vTag) {
@@ -654,51 +670,50 @@ let _d7Mode = 'dev';
 			d7vTag.removeAttribute('_d7vi');
 		})
 
-		htmlContainer.querySelectorAll("[tpltsrc]").forEach(function(d7tplt) {
-			d7tplt.style.display = "none";
+		htmlContainer.querySelectorAll("[compsrc]").forEach(function(compTag) {
+			compTag.style.display = "none";
 		})
 
 		return htmlContainer.firstChild;
 	}
 	fn.render = function(modelData, blockSelector) {
-		var virtualElement = virtualRender.call(this, modelData, blockSelector);
+		var currD7 = this;
+		var virtualBlock = virtualRender.call(currD7, modelData, blockSelector);
 
-		var tarBlock = this._PRIVATE.ROOT.s(blockSelector);
-		tarBlock.querySelectorAll("[tpltid]").forEach(function(d7tplt) {
-			var tpltid = d7tplt.getAttribute("tpltid");
-			publish(null, `_d7_${tpltid}`); // 前回分を解放
+		var tarBlock = currD7._PRIVATE.ROOT.s(blockSelector);
+		tarBlock.innerHTML = virtualBlock.innerHTML;
+		tarBlock.querySelectorAll("[compsrc]").forEach(function(compTag) {
+			loadExComp.call(currD7, compTag);
+			
 		})
-		tarBlock.innerHTML = virtualElement.innerHTML;
-		tarBlock.querySelectorAll("[tpltsrc]").forEach(function(d7tplt) {
-			loadExTplt(d7tplt); // ネストされたテンプレートのロード
-		})
-		this.show(true);
+		currD7.show(true);
 	}
 	// insert before target Child.
 	fn.renderTo = function(modelData, srcSelector, srcChildSlector, tarSelector, tarChildSlector) {
-		var srcBlock = [virtualRender.call(this, modelData, srcSelector)];
+		var currD7 = this;
+		var virtualBlocks = [virtualRender.call(currD7, modelData, srcSelector)];
 		if (srcChildSlector) {
-			srcBlock = srcBlock[0].querySelectorAll(srcChildSlector);
+			virtualBlocks = virtualBlocks[0].querySelectorAll(srcChildSlector);
 		}
 
-		var tarBlock = this.s(tarSelector);
+		var tarBlock = currD7.s(tarSelector);
 		if (!tarBlock) error('tarBlock can not be empty.');
 
 		if (!tarChildSlector) {
-			for (var idx=0; idx<srcBlock.length; idx++) {
-				tarBlock.insertBefore(srcBlock[idx], null);
+			for (var idx=0; idx<virtualBlocks.length; idx++) {
+				tarBlock.insertBefore(virtualBlocks[idx], null);
 			}
 		} else {
 			var tarChild = tarBlock.querySelector(tarChildSlector);
-			for (var idx=0; idx<srcBlock.length; idx++) {
-				tarChild.parentNode.insertBefore(srcBlock[idx], tarChild);
+			for (var idx=0; idx<virtualBlocks.length; idx++) {
+				tarChild.parentNode.insertBefore(virtualBlocks[idx], tarChild);
 			}
 		}
 
-		tarBlock.querySelectorAll("[tpltsrc]").forEach(function(d7tplt) {
-			loadExTplt(d7tplt);
+		tarBlock.querySelectorAll("[compsrc]").forEach(function(compTag) {
+			loadExComp.call(currD7, compTag);
 		})
-		this.show(true);
+		currD7.show(true);
 	}
 	fn.remove = function(tarSelector, childIndex) {
 		if (typeof childIndex === 'undefined') {
@@ -742,10 +757,10 @@ let _d7Mode = 'dev';
 	/*/
 	fn.nextpage = function(url, parameters) {
 		var tarTag = _d7._PRIVATE.ROOT;
-		tarTag.setAttribute("tpltsrc", url);
-		//tarTag.setAttribute("tpltseq", 999); // 同期呼び出し
+		tarTag.setAttribute("compsrc", url);
+		//tarTag.setAttribute("compseq", 999); // synch
 
-		loadExTplt(tarTag, parameters);
+		loadExComp.call(_d7, tarTag, parameters);
 	}
 	/***
 	 * HTTP request
@@ -902,56 +917,46 @@ let _d7Mode = 'dev';
 		this.form.classList.remove(this.cssPrefix + "_overlay_show");
 		this.container.classList.add(this.cssPrefix + "_overlay_closing");
 
-		var tpltid = this.form.getAttribute('tpltid');
-		setTimeout(function(container, tpltid) {
+		var d7name = this.form.getAttribute('_d7name');
+		setTimeout(function(container, d7name) {
 			document.body.removeChild(container);
-			document.querySelectorAll(`[srctpltid="${tpltid}"]`).forEach(function(tag) {
-				tag.remove();
-			});
-		}, 300, this.container, tpltid);
+			deleteComp(d7name);
+		}, 300, this.container, d7name);
 	}
 	/***
 	 * var msgbox = _d7.popup("#msgbox", parameters, true|false);
 	 * msgbox.s("#closeBtn").onclick = function() {msgbox.close();}
 	 */
-	const newChile = function(currD7, tarTag, parameters) {
-		currD7.childseq++;
-		var childName = currD7.fullname + '.children.c' + currD7.childseq;
-		var child = new Dinosaur7(childName, tarTag, parameters);
-		currD7.children[childName] = child;
-		return child;
-	}
-	fn.popup = function (selector, parameters, autoClose) {
-		var currD7 = this;
+	fn.popup = function (selector, params, autoClose) {
 		const defbox = document.querySelector(selector);
 		if (!defbox) error(`can not find popup block. selector[${selector}]`);
 
 		var modal = new Modal("popup", autoClose);
 		modal.form.innerHTML = defbox.innerHTML;
-		var _d7Msgbox = newChile(currD7, modal.form, parameters);
-		_d7Msgbox.render(parameters);
-		_d7Msgbox.close = function() {
+		var currD7 = this;
+		var _d7Popup = createComp(currD7, params);
+		_d7Popup.assignBlock(modal.form);
+		_d7Popup.render(params);
+		_d7Popup.close = function() {
 			modal.close();
-			delete currD7.children[this.name];
 		}
 
 		modal.open();
-		return _d7Msgbox;
+		return _d7Popup;
 	}
 	/***
 	 * var detailModal = _d7.openModal("/detail.html", parameters, true|false);
 	 * detailModal.handleOk = function() {}
 	 */
-	fn.openmodal = function (url, parameters, autoClose) {
+	fn.openmodal = function (url, params, autoClose) {
 		var modal = new Modal("modal", autoClose);
-		modal.form.setAttribute("tpltsrc", url);
-		modal.form.setAttribute("tpltseq", 999); // 同期呼び出し
+		modal.form.setAttribute("compsrc", url);
+		modal.form.setAttribute("compseq", 999); // synch
 
 		var currD7 = this;
-		var _d7Modal = loadExTplt(modal.form, parameters);
+		var _d7Modal = loadExComp.call(currD7, modal.form, params);
 		_d7Modal.close = function() {
 			modal.close();
-			delete currD7.children[this.name];
 		}
 
 		modal.open();
@@ -1068,21 +1073,15 @@ let _d7Mode = 'dev';
 			global[name] = obj; // WINDOWS
 		}
 	}
-	const _d7 = new Dinosaur7('_d7', null, Dinosaur7.prototype.util.queryMap(window.location.href));
+	const _d7 = new Dinosaur7('_d7', Dinosaur7.prototype.util.queryMap(window.location.href));
 	global._d7 = _d7;
 	// call main page's onload function
-	const mainPageInit = function() {
-		var mainBlock = document.querySelector("mainpage");
-		if (!mainBlock) mainBlock = document.querySelector("[mainpage]");
-		if (!mainBlock) error('mainpage not defined.');
+	const mainBlockInit = function() {
+		var mainBlock = document.querySelector("mainblock");
+		if (!mainBlock) mainBlock = document.querySelector("[mainblock]");
+		if (!mainBlock) error('mainblock not defined.');
 		mainBlock.style.display = "none";
-
-		mainBlock.querySelectorAll("[_d7=DUMMY]").forEach(function(dummyBlock) {
-			dummyBlock.remove();
-		})
-		_d7._PRIVATE.ROOT = mainBlock;
-		_d7._PRIVATE.TPLT = document.createElement("div");
-		_d7._PRIVATE.TPLT.innerHTML = mainBlock.innerHTML;
+		_d7.assignBlock(mainBlock);
 
 		document.querySelectorAll('[rel="stylesheet"]').forEach(function(css) {
 			CSS_TAGS.push(css.getAttribute('href'));
@@ -1094,34 +1093,34 @@ let _d7Mode = 'dev';
 			}
 		})
 	}
-	const mainExTplts = function() {
-		var extplts = [];
-		var extpltsAsynch = [];
-		document.querySelectorAll("[tpltsrc]").forEach(function(d7tplt) {
-			if (d7tplt.closest("mainpage")) return;
-			if (d7tplt.closest("[mainpage]")) return;
+	const mainExCompLoad = function() {
+		var exComp = [];
+		var exCompAsynch = [];
+		document.querySelectorAll("[compsrc]").forEach(function(compTag) {
+			if (compTag.closest("mainblock")) return;
+			if (compTag.closest("[mainblock]")) return;
 
-			d7tplt.style.display = "none";
-			if (d7tplt.hasAttribute("tpltseq")) {
-				extplts.push(d7tplt);
+			compTag.style.display = "none";
+			if (compTag.hasAttribute("compseq")) {
+				exComp.push(compTag);
 				return;
 			}
-			extpltsAsynch.push(d7tplt);
+			exCompAsynch.push(compTag);
 		})
-		// 非同期ロード処理
-		for(var idx=0; idx<extpltsAsynch.length; idx++) {
-			loadExTplt(extpltsAsynch[idx]);
+		// asynch first.
+		for(var idx=0; idx<exCompAsynch.length; idx++) {
+			loadExComp.call(_d7, exCompAsynch[idx]);
 		}
-		// 同期優先順位調整
-		extplts.sort(function(e1, e2) {
-			var v1 = parseInt(e1.getAttribute('tpltseq'));
-			var v2 = parseInt(e2.getAttribute('tpltseq'));
+		// synchronize with priority.
+		exComp.sort(function(e1, e2) {
+			var v1 = parseInt(e1.getAttribute('compseq'));
+			var v2 = parseInt(e2.getAttribute('compseq'));
 			if (v1>v2) return  1;
 			if (v1<v2) return -1;
 			return 0;
 		});
-		for(var idx=0; idx<extplts.length; idx++) {
-			loadExTplt(extplts[idx]);
+		for(var idx=0; idx<exComp.length; idx++) {
+			loadExComp.call(_d7, exComp[idx]);
 		}
 	}
 	const hidePage = function() {
@@ -1147,8 +1146,8 @@ let _d7Mode = 'dev';
 		case "loading":
 			document.addEventListener('DOMContentLoaded', function () {
 				//hidePage(); // prevent flickering
-				mainPageInit();
-				mainExTplts();
+				mainBlockInit();
+				mainExCompLoad();
 				typeof _d7._PRIVATE._funcOnload ? _d7._PRIVATE._funcOnload.call(_d7) : _d7.show(true);
 				showPage();
 				// after image css loaded.
@@ -1156,8 +1155,8 @@ let _d7Mode = 'dev';
 			});
 			break;
 		default : // interactive, complete
-			mainPageInit();
-			mainExTplts();
+			mainBlockInit();
+			mainExCompLoad();
 			typeof _d7._PRIVATE._funcOnload ? _d7._PRIVATE._funcOnload.call(_d7) : _d7.show(true);
 			showPage();
 			break;
