@@ -5,7 +5,8 @@ let _d7Mode = 'dev';
  * @author cycauo@gmail.com
  * @version 1.0
  * The name [Dinosaur7] comes from that
- * my daughter likes dinosaurs very much when she is 7 years old.
+ * my daughter likes dinosaurs very much and she is 7 years old.
+ * this framework help you to implement SPA without complex knowledge.
  *
  * Dinosaur7's all symbol in html
  *   [_d7] 		if | for | DUMMY.
@@ -28,9 +29,9 @@ let _d7Mode = 'dev';
  *   fn.renderTo(ModelData, srcSelector, empty|srcChildSlector, tarSelector, empty|tarChildSlector)
  *   fn.remove(selector, empty|childIndex)
  *
- *   fn.show(true|false)
- *   fn.nextpage(url, parameters)
- *   fn.api(url, paramMap, onSuccess, onError)
+ *   fn.show(empty|false)
+ *   fn.loadpage(url, parameters)
+ *   fn.api(url, params, options, onSuccess, onError)
  * 
  *   fn.popup(selector, parameters, autoClose)
  *   fn.openmodal(url, parameters, autoClose)
@@ -42,6 +43,7 @@ let _d7Mode = 'dev';
  *   fn.util.stringifyJSON(data)
  *   fn.util.parseJSON(strJSON)
  *   fn.util.format(value, fmt, prefix, suffix)
+ *   fn.util.emitEvent(selector, eventName, val)
  *   fn.util.persist(key, value)
  * 
  * Expand native Element's method
@@ -66,10 +68,11 @@ let _d7Mode = 'dev';
 		constructor(fullname, params) {
 			this.fullname = fullname;
 			this.params = params;
-			this._PRIVATE = {};
+			this.conf = {pageRoot: "", apiRoot: ""};
+			this._PRIVATE = {showed:false};
+			this._CACHE = {funcRender:{}}; // cache compiled function
 			this.childseq = 0;
 			this.children = {};
-			this._CACHE = {funcRender:{}}; // cache compiled function
 
 			this.assignBlock = function(tarBlock) {
 				tarBlock.setAttribute('_d7name', fullname);
@@ -214,14 +217,15 @@ let _d7Mode = 'dev';
 			if (d7v.startsWith("=m.")) {
 				d7vTag.setAttribute('_d7vi', `${_LOGIC.start}_c.push(_m.${d7v.substring(3)})${_LOGIC.close}${_LOGIC.start}=_c.length-1${_LOGIC.close}`);
 			} else {
-				d7vTag.setAttribute('_d7vi', `${_LOGIC.start}_c.push(${d7v})                ${_LOGIC.close}${_LOGIC.start}=_c.length-1${_LOGIC.close}`);
+				d7vTag.setAttribute('_d7vi', `${_LOGIC.start}_c.push(   ${d7v})             ${_LOGIC.close}${_LOGIC.start}=_c.length-1${_LOGIC.close}`);
 			}
 			// 双方向、かつ_d7m定義されてない場合
 			if (d7v.startsWith("=m.") && !d7vTag.hasAttribute("_d7m")) {
 				var d7m = d7v.substring(3);
 				d7m = d7m.replaceAll("[", "[${");
 				d7m = d7m.replaceAll("]", "}]");
-				d7vTag.setAttribute('_d7m', _LOGIC.start + "=`" + d7m + "`" + _LOGIC.close);
+				//d7vTag.setAttribute('_d7m', _LOGIC.start + "=`" + d7m + "`" + _LOGIC.close);
+				d7vTag.setAttribute('_d7m', _LOGIC.start + "=" + "`" + d7m + "`.replace(/\\[.*?\\]/g,'[]')" + _LOGIC.close);
 			}
 		})
 		/***
@@ -287,16 +291,17 @@ let _d7Mode = 'dev';
 
 		strHtml = strHtml.replace(/[\r\n]/g, "").replace(/'/g, "\\'"); // escape all ' first and recover in below.
 		var tpl = strHtml.replace(new RegExp(regstr, "gm"), function (m, cmtoutStart, start, expr, close, cmtoutClose) {
-				expr = expr.trim();
+				expr = expr.replace(/\\'/gm, "'").trim();
 				if (expr.startsWith("=<")) {
-					expr = expr.substring(2);
-					return "'.replaceAll('_d7.', _d7name + '.') + this.util.encodeHtml(" + expr.replace(/\'/gm, "'") + ") + '";
+					expr = expr.substring(2).trim();
+					return "'.replaceAll('_d7.', _d7name + '.') + this.util.encodeHtml(" + expr + ") + '";
 				}
 				if (expr.startsWith("=")) {
-					expr = expr.substring(1);
-					return "'.replaceAll('_d7.', _d7name + '.') + (" + expr.replace(/\'/gm, "'") + ") + '";
+					expr = expr.substring(1).trim();
+					if (expr === "_c.length-1") return "' + (" + expr + ") + '";
+					return "'.replaceAll('_d7.', _d7name + '.') + (" + expr + ") + '";
 				}
-				return "'.replaceAll('_d7.', _d7name + '.');" + expr.replace(/\'/gm, "'") + "; out+='";
+				return "'.replaceAll('_d7.', _d7name + '.');" + expr + "; out+='";
 			});
 
 		tpl = "var out=''; out+='" + tpl + "'.replaceAll('_d7.', _d7name + '.'); return out;";
@@ -328,9 +333,9 @@ let _d7Mode = 'dev';
 		}
 		delete _d7temp[_d7path[_d7path.length-1]];
 
-		document.querySelectorAll('[_d7namesrc]').forEach(function(tag) {
+		document.querySelectorAll('[_d7nameref]').forEach(function(tag) {
 			// remove css or script even children's'.
-			if (tag.getAttribute('_d7namesrc').startsWith(fullname)) {
+			if (tag.getAttribute('_d7nameref').startsWith(fullname)) {
 				tag.remove();
 			}
 		});
@@ -340,7 +345,7 @@ let _d7Mode = 'dev';
 		if (_d7name) deleteComp(_d7name);
 
 		var compUrl = compTag.getAttribute('compsrc');
-		if (!params) params = Dinosaur7.prototype.util.queryMap(compUrl);
+		if (!params) params = parseQuery(compUrl);
 		var _d7Comp = createComp(this, params);
 
 		if (_CACHE_COMP[compUrl]) {
@@ -435,29 +440,29 @@ let _d7Mode = 'dev';
 			newTag.type = 'text/css';
 			newTag.setAttribute('rel', 'stylesheet');
 			newTag.setAttribute('href', template.cssTags[idx]);
-			newTag.setAttribute('_d7namesrc', d7Comp.fullname);
+			//newTag.setAttribute('_d7nameref', d7Comp.fullname);
 			headTag.appendChild(newTag);
 		}
 		if (template.css) {
 			var newTag = document.createElement('style');
 			newTag.type = 'text/css';
 			newTag.innerHTML = template.css;
-			newTag.setAttribute('_d7namesrc', d7Comp.fullname);
+			newTag.setAttribute('_d7nameref', d7Comp.fullname);
 			headTag.appendChild(newTag);
 		}
 		for (var idx in template.scriptTags) {
 			var newTag = document.createElement('script');
 			newTag.type = 'text/javascript';
 			newTag.setAttribute('src', template.scriptTags[idx]);
-			newTag.setAttribute('_d7namesrc', d7Comp.fullname);
+			//newTag.setAttribute('_d7nameref', d7Comp.fullname);
 			headTag.appendChild(newTag);
 		}
 
 		d7Comp.assignBlock(compTag);
 		(new Function("_d7", template.script))(d7Comp);
 		if (typeof d7Comp._funcOnload !== 'function') {
-			if (d7Comp.notRenderYet) {
-				d7Comp.show(true);
+			if (!d7Comp._PRIVATE.showed) {
+				d7Comp.show();
 			}
 		}
 
@@ -472,15 +477,15 @@ let _d7Mode = 'dev';
 	/*********************************************************************/
 	const tarContainer = function(currContainer, keys, arrayFlg) {
 		var fullKey = "R";
-		var maxIdx = keys.length - 1;
-		for (var idx=0; idx<=maxIdx; idx++) {
+		var finalPos = keys.length - 1;
+		for (var idx=0; idx<=finalPos; idx++) {
 			var key = keys[idx];
 			
 			/*** current container is a MAP ***/
 			if (!key.startsWith("[")) {
 				if (!(currContainer instanceof Object)) error("not a MAP. " + fullKey);
 
-				if (idx == maxIdx) return currContainer;
+				if (idx == finalPos) return currContainer;
 
 				if (!currContainer[key]) {
 					if (keys[idx+1].startsWith("[")) {
@@ -502,13 +507,13 @@ let _d7Mode = 'dev';
 
 			if (strIdx === ""){
 				// append key[]
-				if (idx==maxIdx) {
+				if (idx==finalPos) {
 					keys[idx] = currContainer.length;
 					currContainer.push(null);
 					return currContainer;
 				}
 
-				if (currContainer.length <1) return error("must have at least one element. " + fullKey);
+				if (currContainer.length <1) return error(`forgot specify new array flag? ${fullKey}[+]`);
 				
 				// last key[][], key[].key2
 				currContainer = currContainer[currContainer.length-1];
@@ -518,22 +523,17 @@ let _d7Mode = 'dev';
 
 			if(strIdx === "+"){
 				// append key[+]
-				if (idx==maxIdx) {
+				if (idx==finalPos) {
 					keys[idx] = currContainer.length;
 					currContainer.push(null);
 					return currContainer;
 				}
 				
 				// add element key[+][], key[+].key2
-				var firstFlg = fullKey + '[0]';
-				if ((firstFlg in arrayFlg)) {
-					if (keys[idx+1].startsWith("[")) {
-						currContainer.push([]);
-					} else {
-						currContainer.push({});
-					}
+				if (keys[idx+1].startsWith("[")) {
+					currContainer.push([]);
 				} else {
-					arrayFlg[firstFlg] = 1;
+					currContainer.push({});
 				}
 
 				currContainer = currContainer[currContainer.length-1];
@@ -544,7 +544,7 @@ let _d7Mode = 'dev';
 			// insert to pinpoint
 			if(strIdx.startsWith("<")) 	{
 				var numIdx = parseInt(strIdx.substring(1) || "0");
-				if (idx==maxIdx) {
+				if (idx==finalPos) {
 					for (var listIdx=currContainer.length-1; listIdx<numIdx-1; listIdx++) currContainer.push(null);
 					currContainer.splice(numIdx, 0, null);
 					keys[idx] = numIdx;
@@ -566,7 +566,7 @@ let _d7Mode = 'dev';
 			// replace pinpoint
 			var numIdx  = parseInt(strIdx);
 			if (numIdx < 0) error("array must be one of these [], [+], [n], [<n]. " + fullKey);
-			if (idx==maxIdx) {
+			if (idx==finalPos) {
 				for (var listIdx=currContainer.length-1; listIdx<numIdx; listIdx++) currContainer.push(null);
 				keys[idx] = numIdx;
 				return currContainer;
@@ -582,7 +582,7 @@ let _d7Mode = 'dev';
 		}
 		return currContainer;
 	}
-	const extractModel = function(selector) {
+	const extractModelOld = function(selector) {
 		var modelData = {};
 		var arrayFlg = {};
 		this.querySelectorAll(selector ? (selector + " [_d7m]") : "[_d7m]").forEach(function(d7mTag) {;
@@ -595,6 +595,25 @@ let _d7Mode = 'dev';
 			var tc = tarContainer(modelData, keys, arrayFlg);
 			tc[keys[keys.length-1]] = d7mTag.val(accessKey[1] || '');
 		})
+
+		return modelData;
+	}
+	const extractModel = function(tarBlock, modelData, arrayFlg) {
+		var d7m = tarBlock.getAttribute('_d7m');
+		if (d7m) {
+			d7m = d7m.replaceAll(" ", "");
+			if (d7m.startsWith("[")) error("_d7m can not starts with array " + tarBlock.outerHTML);
+	
+			var accessKey = d7m.split(',');
+			var keys = accessKey[0].trim().replaceAll("[", ".[").replaceAll("..", ".").split(".");
+			var tc = tarContainer(modelData, keys, arrayFlg);
+			tc[keys[keys.length-1]] = tarBlock.val(accessKey[1] || '');
+		}
+
+		// must be sequentially!
+		for (var idx=0; idx<tarBlock.children.length; idx++) {
+			extractModel(tarBlock.children[idx], modelData, arrayFlg);
+		}
 
 		return modelData;
 	}
@@ -617,13 +636,11 @@ let _d7Mode = 'dev';
 	/*********************************************************************/
 	const fn = Dinosaur7.prototype;
 	fn.onload = function(funcOnload) {
-		if (!this._PRIVATE.ROOT) {
-			this._PRIVATE._funcOnload = function() {
-				funcOnload.call(this);
-			}
-			return;
+		var currD7 = this;
+		this._PRIVATE._funcOnload = function() {
+			funcOnload.call(currD7);
 		}
-		funcOnload.call(this);
+		if (this._PRIVATE.ROOT) this._PRIVATE._funcOnload(currD7);
 	}
 	fn.s = function(selector, index) {
 		if (!selector) return this._PRIVATE.ROOT;
@@ -634,11 +651,15 @@ let _d7Mode = 'dev';
 		return elements[index];
 	}
 	fn.S = function(selector) {
-		if (!selector) return this._PRIVATE.ROOT;
+		if (!selector) return [this._PRIVATE.ROOT];
 		return this._PRIVATE.ROOT.querySelectorAll(selector);
 	}
 	fn.m = function(selector) {
-		return extractModel.call(this._PRIVATE.ROOT, selector);
+		var modelData = {};
+		var arrayFlg = {};
+		extractModel(this.s(selector), modelData, arrayFlg);
+		return modelData;
+		//return extractModelOld.call(this._PRIVATE.ROOT, selector);
 	}
 	/***
 	 * render model data to elements
@@ -671,6 +692,7 @@ let _d7Mode = 'dev';
 		})
 
 		htmlContainer.querySelectorAll("[compsrc]").forEach(function(compTag) {
+			if (compTag.hasAttribute("solidblock")) return;
 			compTag.style.display = "none";
 		})
 
@@ -683,8 +705,8 @@ let _d7Mode = 'dev';
 		var tarBlock = currD7._PRIVATE.ROOT.s(blockSelector);
 		tarBlock.innerHTML = virtualBlock.innerHTML;
 		tarBlock.querySelectorAll("[compsrc]").forEach(function(compTag) {
+			if (compTag.hasAttribute("solidblock")) return;
 			loadExComp.call(currD7, compTag);
-			
 		})
 		currD7.show(true);
 	}
@@ -711,6 +733,7 @@ let _d7Mode = 'dev';
 		}
 
 		tarBlock.querySelectorAll("[compsrc]").forEach(function(compTag) {
+			if (compTag.hasAttribute("solidblock")) return;
 			loadExComp.call(currD7, compTag);
 		})
 		currD7.show(true);
@@ -732,19 +755,17 @@ let _d7Mode = 'dev';
 	 * show(true|false)
 	/*/
 	fn.show = function(visible) {
-		if (!this._PRIVATE.ROOT) return;
-
-		if (this._PRIVATE.ROOT.body) {
-			if (visible === false) {
-				this._PRIVATE.ROOT.body.style.display = "none";
-				this._PRIVATE.ROOT.body.style.visibility = "hidden";
+		if (!_d7root._PRIVATE.showed) {
+			if (document.body) {
+				document.body.style.display = "block";
+				document.body.style.visibility = "visible";
 			} else {
-				this._PRIVATE.ROOT.body.style.display = "block";
-				this._PRIVATE.ROOT.body.style.visibility = "visible";
+				var firstBlock = document.querySelector("header +");
+				firstBlock.style.display = "block";
 			}
+			_d7root._PRIVATE.showed = true;
 		}
-
-		if (!this._PRIVATE.ROOT.style) return;
+		this._PRIVATE.showed = true;
 
 		if (visible === false) {
 			this._PRIVATE.ROOT.style.display = "none";
@@ -755,50 +776,42 @@ let _d7Mode = 'dev';
 	/***
 	 * single page mode
 	/*/
-	fn.nextpage = function(url, parameters) {
-		var tarTag = _d7._PRIVATE.ROOT;
-		tarTag.setAttribute("compsrc", url);
+	fn.loadpage = function(url, parameters) {
+		var tarTag = _d7root._PRIVATE.ROOT;
+		tarTag.setAttribute("compsrc", _d7root.conf.pageRoot + url);
 		//tarTag.setAttribute("compseq", 999); // synch
 
-		loadExComp.call(_d7, tarTag, parameters);
+		loadExComp.call(_d7root, tarTag, parameters);
 	}
 	/***
 	 * HTTP request
 	 * 	 default : GET JSON
 	 * 	 you can set paramMap to {_method:'POST', _responseType:'TEXT'}
 	/*/
-	fn.api = function(url, paramMap, onSuccess, onError) {
+	fn.api = function(url, paramMap, options, onSuccess, onError) {
 		processing();
 
-		var ibtInstance = this;
-		var method = "GET";
-		var responseType = "JSON";
+		var currD7 = this;
 
-		if (paramMap) {
-			if (paramMap._method) {
-				method = paramMap._method.toUpperCase();
-				delete paramMap._method;
-			}
-			if (paramMap._responseType) {
-				responseType = paramMap._responseType.toUpperCase();
-				delete paramMap._responseType;
-			}
-			if (method == "GET") {
-				url = this.util.tringifyUrl(url, paramMap);
-				paramMap = null;
-			}
-		}
+		if (!options) options = {};
+		if (!options.method) options.method = "GET";
+		if (!options.responseType) options.responseType = "JSON";
+		options.method = options.method.toUpperCase();
+		options.responseType = options.responseType.toUpperCase();
+		if (options.method == "GET") url = this.util.tringifyUrl(url, paramMap);
+
+		url = _d7root.conf.apiRoot + url;
 		var xhr = new XMLHttpRequest();
 		xhr.onload = function() {
 			var response;
 			try{
-				if (responseType == "JSON") {
+				if (options.responseType == "JSON") {
 					response = JSON.parse(xhr.responseText);
 				} else {
 					response = xhr.responseText;
 				}
 			}catch (e) {
-				if (responseType == "JSON") {
+				if (options.responseType == "JSON") {
 					response = {_exception: 1};
 					response.response = xhr.responseText;
 				} else {
@@ -806,22 +819,22 @@ let _d7Mode = 'dev';
 				}
 			}
 			if (xhr.status == 200) {
-				if (onSuccess) onSuccess.call(ibtInstance, response, xhr.status);
+				if (onSuccess) onSuccess.call(currD7, response, xhr.status);
 			} else {
-				if (onError) onError.call(ibtInstance, response, xhr.status);
-				error("http: " + method + " " + url + " status[" + xhr.status + "]");
+				if (onError) onError.call(currD7, response, xhr.status);
+				error("http: " + options.method + " " + url + " status[" + xhr.status + "]");
 			}
 			processing(false);
 		}
 		xhr.onerror = function() {
-			if (onError) onError.call(ibtInstance, null, 0);
-			error("http: " + method + " " + url + " status[failed]");
+			if (onError) onError.call(currD7, null, 0);
+			error("http: " + options.method + " " + url + " status[failed]");
 			processing(false);
 		}
-		xhr.open(method, url);
+		xhr.open(options.method, url);
 		xhr.setRequestHeader("Content-Type", "application/json; charset=utf-8");
 		//xhr.responseType = 'json';
-		xhr.send(method == "POST" ? JSON.stringify(paramMap) : null);
+		xhr.send(options.method == "POST" ? JSON.stringify(paramMap) : null);
 	}
 
 	/*********************************************************************
@@ -831,10 +844,10 @@ let _d7Mode = 'dev';
      *   fn.util.stringifyJSON(data)
      *   fn.util.parseJSON(strJSON)
      *   fn.util.format(value, strFormat, prefix, suffix)
+	 *   fn.util.emitEvent(selector, eventName, val)
      *   fn.util.persist(key, value)
 	/*********************************************************************/
-	fn.util = {};
-	fn.util.queryMap = function(strUrl) {
+	const parseQuery = function(strUrl) {
 		var params = {};
 		strUrl = strUrl.startsWith("http:") ? strUrl : ("http://tmp.com" + strUrl);
 		const url = new URL(strUrl);
@@ -843,6 +856,7 @@ let _d7Mode = 'dev';
 		});
 		return params;
 	}
+	fn.util = {};
 	fn.util.encodeHtml = function(strHtml) {
 		strHtml = strHtml + '';
 		strHtml = strHtml.replace(/[<>"'\/]/g, function (c) { 
@@ -871,9 +885,17 @@ let _d7Mode = 'dev';
 			return prefix + value.toLocaleString() + suffix;
 		}
 	}
-	fn.util.persist = function(key, data) {
+	fn.util.emitEvent = function(selector, eventName, val) {
+		var element = document.querySelector(selector);
+		if (!element) error("target not found in sendEvent. " + selector);
+		element.dispatchEvent(new Event(eventName, val));
+	}
+	fn.util.persistVal = function(key, data) {
+		if (typeof data === 'undefined') {
+			return localStorage.getItem(key);
+		}
+
 		localStorage.setItem(key, data);
-		// when error save to cookie
 	}
 	/*********************************************************************
 	 * popup(msgbox) | modal | processing
@@ -1073,30 +1095,18 @@ let _d7Mode = 'dev';
 			global[name] = obj; // WINDOWS
 		}
 	}
-	const _d7 = new Dinosaur7('_d7', Dinosaur7.prototype.util.queryMap(window.location.href));
-	global._d7 = _d7;
-	// call main page's onload function
-	const mainBlockInit = function() {
+	const _d7 = new Dinosaur7('_d7', parseQuery(window.location.href));
+	global._d7root = global._d7 = _d7;
+	const mainInit = function() {
 		var mainBlock = document.querySelector("mainblock");
 		if (!mainBlock) mainBlock = document.querySelector("[mainblock]");
 		if (!mainBlock) error('mainblock not defined.');
 		mainBlock.style.display = "none";
-		_d7.assignBlock(mainBlock);
 
-		document.querySelectorAll('[rel="stylesheet"]').forEach(function(css) {
-			CSS_TAGS.push(css.getAttribute('href'));
-		})
-		document.querySelectorAll('script').forEach(function(script) {
-			var src = script.getAttribute('src');
-			if (src){
-				SCRIPT_TAGS.push(src);
-			}
-		})
-	}
-	const mainExCompLoad = function() {
 		var exComp = [];
 		var exCompAsynch = [];
 		document.querySelectorAll("[compsrc]").forEach(function(compTag) {
+			if (compTag.hasAttribute("solidblock")) return;
 			if (compTag.closest("mainblock")) return;
 			if (compTag.closest("[mainblock]")) return;
 
@@ -1107,6 +1117,18 @@ let _d7Mode = 'dev';
 			}
 			exCompAsynch.push(compTag);
 		})
+
+		// css, javascript
+		document.querySelectorAll('[rel="stylesheet"]').forEach(function(css) {
+			CSS_TAGS.push(css.getAttribute('href'));
+		})
+		document.querySelectorAll('script').forEach(function(script) {
+			var src = script.getAttribute('src');
+			if (src){
+				SCRIPT_TAGS.push(src);
+			}
+		})
+
 		// asynch first.
 		for(var idx=0; idx<exCompAsynch.length; idx++) {
 			loadExComp.call(_d7, exCompAsynch[idx]);
@@ -1122,44 +1144,26 @@ let _d7Mode = 'dev';
 		for(var idx=0; idx<exComp.length; idx++) {
 			loadExComp.call(_d7, exComp[idx]);
 		}
-	}
-	const hidePage = function() {
-		if (document.body) {
-			document.body.style.display = "none";
-			document.body.style.visibility = "hidden";
+
+		_d7.assignBlock(mainBlock);
+		if (_d7._PRIVATE.ROOT.hasAttribute("solidblock")) {
+			typeof _d7._PRIVATE._funcOnload ? _d7._PRIVATE._funcOnload.call(_d7) : _d7.show(true);
 			return;
 		}
-		var pageBlock = document.querySelector("header +");
-		pageBlock.style.display = "none";
-	}
-	const showPage = function() {
-		if (document.body) {
-			document.body.style.display = "block";
-			document.body.style.visibility = "visible";
-			return;
-		}
-		var pageBlock = document.querySelector("header +");
-		pageBlock.style.display = "block";
+		if (!_d7.conf.pageRoot) error('must define page root. _d7.conf.pageRoot = "/xxx"');
+
+		_d7.loadpage(window.location.pathname, parseQuery(window.location.href));
 	}
 	// assign to system's onload
 	switch (document.readyState) {
 		case "loading":
 			document.addEventListener('DOMContentLoaded', function () {
-				//hidePage(); // prevent flickering
-				mainBlockInit();
-				mainExCompLoad();
-				typeof _d7._PRIVATE._funcOnload ? _d7._PRIVATE._funcOnload.call(_d7) : _d7.show(true);
-				showPage();
-				// after image css loaded.
-				// window.addEventListener("load", function () {});
+				mainInit();
+				// window.addEventListener("load", function () {}); // after image css loaded.
 			});
 			break;
 		default : // interactive, complete
-			mainBlockInit();
-			mainExCompLoad();
-			typeof _d7._PRIVATE._funcOnload ? _d7._PRIVATE._funcOnload.call(_d7) : _d7.show(true);
-			showPage();
+			mainInit();
 			break;
 	}
-
 })(this);
