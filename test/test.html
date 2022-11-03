@@ -5,19 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="Web site created using create-react-app"/>
-    <script type="application/javascript" src="dinosaur7.js"></script>
+    <link rel="stylesheet" href="/css/dinosaur7.min.css" type="text/css">
+    <script type="application/javascript" src="/js/dinosaur7.min.js"></script>
 
     <title>React App</title>
   </body>
   <body style="display: none;">
-    <link rel="stylesheet" href="dinosaur7.css" type="text/css">
-    <header tpltsrc="/com/header.html?val1=111&val2=aaa" tpltseq="4">wait header1</header>
-    <header tpltsrc="/com/header.html?val1=222&val2=aaa" tpltseq="1">wait header2</header>
-    <header tpltsrc="/com/header.html?val1=333&val2=aaa" tpltseq="3">wait header3</header>
-    <mainpage>
+    <header compsrc="/com/header.html?val1=111&val2=aaa" compseq="4">wait header1</header>
+    <header compsrc="/com/header.html?val1=222&val2=aaa" compseq="1">wait header2</header>
+    <header compsrc="/com/header.html?val1=333&val2=aaa" compseq="3">wait header3</header>
+    <mainblock solidblock>
+    　　<div class="testdiv testdiv2 " style="color:red; width:300px; font-size: 24px;" attr1='val1' attr2>testdiv</div>
       pageAAAA contents
       <button onclick="_d7.openMsg();">OPEN MESSAGE</button>
-      <button onclick="_d7.orderDetail();">OPEN MODAL</button>
+      <button onclick="_d7.orderDetail();" id="modal">OPEN MODAL</button>
       <button onclick="_d7.apendB();">appendBtn</button>
       <button onclick="_d7.apendC();">テスト</button>
       <button onclick="_d7.delete();">removeCtn</button>
@@ -33,19 +34,19 @@
             <td _d7v="row.colC"></td>
           </tr>
           <tr _d7="for(idx in _m.datalist) var row = _m.datalist[idx]">
-            <td _d7v="=m.datalist[idx].colA"></td>
-            <td _d7v="=m.datalist[idx].colB"></td>
-            <td _d7v="=m.datalist[idx].colC"></td>
+            <td _d7v="=m.datalist[idx].colA" _d7m=",attr1,0" attr1="attVal"></td>
+            <td _d7v="=m.datalist[idx].colB" ></td>
+            <td _d7v="=m.datalist[idx].colC" ></td>
           </tr>
         </table>
       </div>
       <div>
-        <input class="1input" type="text" value="input.value" attrV="attrV.value" />
-        <span class="1span" value="span1.value" attrV="attrV1.value1">span1's inner html</span>
-        <span class="1span" value="span2.value" attrV="attrV2.value2">span2's inner html</span>
-        <span class="1span" value="span3.value" attrV="attrV3.value2">span3's inner html</span>
+        <input class="input1" type="text" value="input.value" attrV="attrV.value" />
+        <span class="span1" value="span1.value" attrV="attrV1.value1">span1's inner html</span>
+        <span class="span2" value="span2.value" attrV="attrV2.value2">span2's inner html</span>
+        <span class="span3" value="span3.value" attrV="attrV3.value2">span3's inner html</span>
       </div>
-    </mainpage>
+    </mainblock>
     <div id="msgbox" style="display: none;">
       <div class="title">title</div>
       <div class="contents" _d7v="_m.msg">is it ok?</div>
@@ -54,10 +55,10 @@
         <button onclick="_d7.clickCancel();">cancel</button>
       </div>
     </div>
-    <footer tpltsrc="/com/footer.html">weit footer</footer>
+    <footer compsrc="/com/footer.html">weit footer</footer>
   </body>
   <script type="application/javascript">
-
+  	_d7.conf.pagebase = "/page";
     _d7.onload(function(){
       vals = {};
       vals.key1 = "key1val";
@@ -78,7 +79,7 @@
       }
     }
     _d7.orderDetail = function() {
-      var modal = this.openmodal('/mainpage.html', {msg:'modal parameter!'}, true);
+      var modal = this.loadmodal('/mainpage.html', {msg:'modal parameter!'}, true);
       modal.exClick = function() {
         alert("modal ex clicked!");
         modal.close();
@@ -91,27 +92,33 @@
       vals.datalist.push({colA:"colAval91", colB:"colBval91", colC:"colBval91"});
       vals.datalist.push({colA:"colAval92", colB:"colBval92", colC:"colBval92"});
       vals.datalist.push({colA:"colAval93", colB:"colBval93", colC:"colBval93"});
-      this.renderTo(vals, 'table', 'tr', 'table', 'tr:nth-child(1)');
+      //this.renderTo(vals, 'table', 'tr', 'table', 'tr:nth-child(2)');
+      this.renderTo(vals, 'table', 'tr', 'table', '');
       console.info("test");
     }
     _d7.delete = function() {
-      //this.remove('table tbody', 1);
-      this.processing();
+      this.remove('table tbody', 1);
+      //this.processing();
     }
 
     _d7.apendC = function() {
-      var strfunc = "var str='ab\'c'; console.info(str);";
-      strfunc = strfunc.replace(/'/g, '\\\'');
-      alert(strfunc);
-      var func = new Function(strfunc);
-      func();
-      return;
-
-      console.info('[.1input]' + this.s('.1input').val());
-      console.info('[.1span]' + this.s('.1span').val());
-      console.info('[.1span]' + this.s('.1span').val('attrV'));
-      console.info('[.1span]' + this.s('.1span').val('text'));
-
+    	console.info(this.m());
+    	console.info(this.util.format('20130123', ',', '円'));
+    	console.info(this.util.format('20130123', 'date', '-'));
+    	console.info(this.util.format('20130123', 'date', '/'));
+    	console.info(this.util.format('20130123 123456', 'datetime', '-'));
+    	console.info(this.util.format('20130123 123456', 'datetime', '/'));
+    	console.info(this.util.format('20130123 123456', 'time', '/'));
+    	console.info(this.util.format('123456', 'time', '/'));
+    	
+    	this.api("/agent/test/9", {key1:'val1', key2:'val2'}, {method:'post', responseType:'text', header:{token: 'xyz'}}
+    	, function(response, status) {
+    		console.info(response);
+    	}
+    	, function(response, status) {
+    		console.info(response);
+    	}
+    	);
     }
   </script>
 </html>
