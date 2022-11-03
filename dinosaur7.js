@@ -3,7 +3,7 @@ let _d7Mode = 'dev';
  * @author Dinosaur7
  * @author kougen.sai
  * @author cycauo@gmail.com
- * @version 1.0
+ * @version 2.1
  * The name [Dinosaur7] comes from that
  * my daughter likes dinosaurs very much and she is 7 years old.
  * this framework help you to implement SPA without complex knowledge.
@@ -34,7 +34,7 @@ let _d7Mode = 'dev';
  *   fn.api(url, params, options, onSuccess, onError)
  * 
  *   fn.popup(selector, parameters, autoClose)
- *   fn.openmodal(url, parameters, autoClose)
+ *   fn.modal(url, parameters, autoClose)
  *   fn.processing(empty|false)
  * 
  * Dinosaur7's util
@@ -123,7 +123,39 @@ let _d7Mode = 'dev';
 		"AREA": "map",
 		"LEGEND": "fieldset",
 	};
+	const makeContainerTag = function(tagName) {
+		var htmlTag = document.createElement("div");
+		var strContainer = _TYPECONTAINER[tagName.toUpperCase()];
+		if (!strContainer) return htmlTag;
 
+		var tags = strContainer.split(" ");
+		for (var idx in tags) {
+			var tempTag = document.createElement(tags[idx]);
+			htmlTag.append(tempTag);
+			htmlTag = tempTag;
+		}
+		return htmlTag;
+	}
+    const bracketsPos = function(str, startPos, strStart, strEnd) {
+		if (!str) return null;
+		if (!str) return null;
+  
+		var deeps = 0;
+		var posStart = -1;
+		for (var idx = startPos; idx < str.length; idx++) {
+		  var currStr = str.charAt(idx);
+		  if (currStr === strStart) {
+			if (deeps === 0) posStart = idx;
+			deeps++;
+		  }
+		  if (currStr === strEnd) {
+			if (deeps === 1) return [posStart, idx];
+			deeps--;
+		  }
+		}
+  
+		return null;
+	}
 	/*********************************************************************
 	 * compile html.
 	 * [_d7] support only if|for|DUMMY
@@ -136,53 +168,50 @@ let _d7Mode = 'dev';
 		if (!selector) selector = "_d7Root"
 		if (this._CACHE.funcRender[selector]) return this._CACHE.funcRender[selector];
 
-		var tplts = this._PRIVATE.TPLT.querySelectorAll(selector);
-		if (selector === "_d7Root") {
-			tplts = [this._PRIVATE.TPLT];
-		}
-		if (tplts.length < 1) {
-			error("not found template area with selector [" + selector + "]");
-			return;
-		}
-		if (tplts.length > 2) {
-			error("only one template area is allowed, but there is " + tplts.length + " with selector[" + selector + "]");
-			return;
-		}
-		if (tplts[0].hasAttribute("_d7")) {
-			error("can't specify attribute [_d7] in root element.");
-			return;
+		var tarBlock = this._PRIVATE.TPLT;
+		if (selector !== "_d7Root") {
+			var blocks = this._PRIVATE.TPLT.querySelectorAll(selector);
+			if (blocks.length < 1) {
+				error("not found target block with selector [" + selector + "]");
+				return;
+			}
+			if (blocks.length > 2) {
+				error("only one block is allowed, but there is " + blocks.length + " with selector[" + selector + "]");
+				return;
+			}
+			tarBlock = blocks[0];
 		}
 
-		var markedHtml = normalizeCompileMark(tplts[0].outerHTML);
+		var markedHtml = analyzeD7Mark(tarBlock);
 		var renderFunc = makeRenderFunc(markedHtml);
 		this._CACHE.funcRender[selector] = renderFunc
 		return renderFunc;
 	}
-	const normalizeCompileMark = function(strHtml) {
+	const analyzeD7Mark = function(tarBlock) {
 
 		/***
-		 * ロジックマーク正規化
-		 * ロジック前後にに<!-- -->を追加する（html escape防止）
+		 * {% xxx %}
+		 * normalize to <!-- {% xxx %} -->
 		 */
+		var strHtml = tarBlock.outerHTML;
 		var RegStart = new RegExp("(<!\\-\\-\\s*)?(" + _LOGIC.start + ")", "gm");
 		var RegClose = new RegExp("(" + _LOGIC.close + ")(\\s*\\-\\->)?", "gm");
 		strHtml = strHtml.replace(RegStart, function (m, cmtStart, start) {return "<!-- " + start;})
 		strHtml = strHtml.replace(RegClose, function (m, close, cmtClose) {return close + " -->";})
-		var divTemp = document.createElement("div");
-		divTemp.innerHTML = strHtml;
+		var workingTag = makeContainerTag(tarBlock.tagName);
+		workingTag.innerHTML = strHtml;
 
 
 		/***
-		 * _d7プロパティ展開
-		 * if, for
+		 * _d7 logic [if | for]
 		 */
 		var logic = {};
-		var logicKey; var idx = 0; var prefix = "_d7L0Gic"; 
-		divTemp.querySelectorAll("[_d7]").forEach(function(d7Tag) {
+		var logicKey; var idx = 0; const prefix = "_d7l0Gic"; 
+		workingTag.querySelectorAll("[_d7]").forEach(function(d7Tag) {
 			var expr = d7Tag.getAttribute("_d7").trim();
 
 			d7Tag.removeAttribute("_d7");
-			var block = analyzeD7(expr);
+			var block = analyzeD7Logic(expr);
 			if (block.start) {
 				logicKey = prefix + (++idx) + "E";
 				logic[logicKey] = _LOGIC.start + " " + block.start + " " + _LOGIC.close;
@@ -194,70 +223,101 @@ let _d7Mode = 'dev';
 				logic[logicKey] = _LOGIC.start + " " + block.close + " " + _LOGIC.close;
 				d7Tag.after(logicKey);
 			}
-		})
-
+		});
 		/***
-		 * _d7vプロパティ簡略表記[.]展開
+		 * when <UpperTag _d7v="_m.key1."> and <LowerTag _d7v="key1.key2">
+		 * then to                             <LowerTag _d7v="_m.key1.key1.key2">
 		 */
-		divTemp.querySelectorAll("[_d7v]").forEach(function(d7vTag) {
+		 workingTag.querySelectorAll("[_d7v]").forEach(function(d7vTag) {
 			var d7v = d7vTag.getAttribute('_d7v');
 			if(!d7v.endsWith(".")) return;
 			if(!d7v.startsWith("_m.") && !d7v.startsWith("=m.")) return;
 
-			expandD7v(d7vTag, d7v);
-		})
+			expandD7ModelExpr(d7vTag, d7v);
+		});
 		/***
-		 * _d7vプロパティ展開
 		 * <span _d7v="=m.key1.key[idx].val,attr"></span>
-		 * <span _d7v="=m.key1.key[idx].val,attr" _d7vi="{% _c.push(_m.key1.key[idx].val) %}{# _c.size()-1 #}" _d7m="{# `key1.key[${idx}].val` #}"></span>
+		 * to
+		 * <span _d7v="=m.key1.key[idx].val,attr"
+		 *       _d7vi="{%_c.push(_m.key1.key[idx].val)%}{%=_c.size()-1%}"
+		 *       _d7m="key1.key[].val">
+		 * </span>
 		 */
-		divTemp.querySelectorAll("[_d7v]").forEach(function(d7vTag) {
-			var d7v = d7vTag.getAttribute('_d7v');
+		 workingTag.querySelectorAll("[_d7v]").forEach(function(d7vTag) {
+			var d7v = d7vTag.getAttribute('_d7v').split(',')[0];
+			d7vTag.setAttribute('_d7vi', `${_LOGIC.start}_c.push(${d7v.replaceAll("=m.", "_m.")})${_LOGIC.close}${_LOGIC.start}=_c.length-1${_LOGIC.close}`);
+			if (!d7v.startsWith("=m.")) return;
 
-			if (d7v.startsWith("=m.")) {
-				d7vTag.setAttribute('_d7vi', `${_LOGIC.start}_c.push(_m.${d7v.substring(3)})${_LOGIC.close}${_LOGIC.start}=_c.length-1${_LOGIC.close}`);
-			} else {
-				d7vTag.setAttribute('_d7vi', `${_LOGIC.start}_c.push(   ${d7v})             ${_LOGIC.close}${_LOGIC.start}=_c.length-1${_LOGIC.close}`);
+			var d7m = (d7vTag.getAttribute('_d7m') || "").split(',');
+			if (d7m[0]) return; // model defined manually
+
+			var d7v = d7v.substring(3);
+			var startPos = 0;
+			for (var idx=0; ; idx++) {
+				pos = bracketsPos(d7v, startPos, '[', ']');
+				if (!pos) break;
+				d7v = d7v.substring(0,pos[0]+1) + d7v.substring(pos[1]);
+				startPos = pos[0] + 2;
 			}
-			// 双方向、かつ_d7m定義されてない場合
-			if (d7v.startsWith("=m.") && !d7vTag.hasAttribute("_d7m")) {
-				var d7m = d7v.substring(3);
-				d7m = d7m.replaceAll("[", "[${");
-				d7m = d7m.replaceAll("]", "}]");
-				//d7vTag.setAttribute('_d7m', _LOGIC.start + "=`" + d7m + "`" + _LOGIC.close);
-				d7vTag.setAttribute('_d7m', _LOGIC.start + "=" + "`" + d7m + "`.replace(/\\[.*?\\]/g,'[]')" + _LOGIC.close);
+			d7m[0] = d7v;
+			d7vTag.setAttribute('_d7m', d7m.join(','));
+		});
+		workingTag.querySelectorAll("[_d7m]").forEach(function(d7mTag) {
+			var d7m = d7mTag.getAttribute('_d7m');
+			if (d7m.indexOf(',') < 0) return;
+
+			var newArrayFlg = d7m.split(',');
+			d7m = newArrayFlg[0];
+			var startPos = 0;
+			for (var idx=0; ; idx++) {
+				pos = bracketsPos(d7m, startPos, '[', ']');
+				if (!pos) break;
+				if (!newArrayFlg.includes(idx.toString())) {
+					startPos = pos[1] + 1;
+					continue;
+				}
+				d7m = d7m.substring(0,pos[0]+1) + '+' + d7m.substring(pos[1]);
+				startPos = pos[0] + 3;
 			}
-		})
+			d7mTag.setAttribute('_d7m', d7m);
+		});
 		/***
-		 * _d7プロパティ展開
-		 * 上でのロジックを書き換え
+		 * replace logicKey in string mode.
 		 */
-		strHtml = divTemp.innerHTML;
+		strHtml = workingTag.innerHTML;
 		for (logicKey in logic) {
 			strHtml = strHtml.replace(logicKey, logic[logicKey]);
 		}
 		return strHtml;
 	}
-	const analyzeD7 = function(expr) {
-		if (expr.match(/^if\(.*?\)\s+(continue|break)/)) {
-			return {start: expr};
-		}
-		var m = expr.match(/^(if|for)\s*\(.*?\)\s*({?)/);
-		if (m) {
-			if (m[2]) {
-				return {start: expr, close:"}"};
-			} else {
-				return {start: expr.replace(/(.+\(.*?\))/, "$1 {"), close:"}"};
+	const analyzeD7Logic = function(expr) {
+		expr = expr.trim();
+		var pos = bracketsPos(expr, 0, '(', ')');
+		if (!pos) error("analyzeD7Logic: " + expr);
+		var ctl = expr.substring(0,pos[0]).trim();
+		var control = expr.substring(0,pos[1]+1).trim();
+		var logic = expr.substring(pos[1]+1).trim();
+		if (ctl === 'if') {
+			if (logic.match(/^continue|break/)) return {start: expr};
+			return {
+				start: logic.startsWith('{') ? expr : `${control}{${logic}`,
+				close:"}"
 			}
 		}
-		error("syntaxAnalyze: " + expr);
+		if (ctl === 'for') {
+			return {
+				start: logic.startsWith('{') ? expr : `${control}{${logic}`,
+				close:"}"
+			}
+		}
+		error("analyzeD7Logic: " + expr);
 	}
-	const expandD7v = function(topD7vTag, prefix) {
+	const expandD7ModelExpr = function(topD7vTag, prefix) {
 		topD7vTag.removeAttribute('_d7v');
 
 		topD7vTag.children.forEach(function(child) {
 			if (!child.hasAttribute('_d7v')) {
-				expandD7v(child, prefix);
+				expandD7ModelExpr(child, prefix);
 				return;
 			}
 
@@ -265,19 +325,20 @@ let _d7Mode = 'dev';
 
 			if(d7v.startsWith("_m.") || d7v.startsWith("=m.")) {
 				// prefixリセット、外側で行われる
-				if (d7v.endsWith(".")) return
+				if (d7v.endsWith(".")) return;
 
-				expandD7v(child, prefix);
+				// 自身はそのままで何もしない
+				expandD7ModelExpr(child, prefix);
 				return;
 			}
 			// さらに下位層への展開が必要の場合
 			if (d7v.endsWith(".")) {
-				expandD7v(child, prefix + d7v);
+				expandD7ModelExpr(child, prefix + d7v);
 				return;
 			}
 
 			child.setAttribute('_d7v', prefix + d7v);
-			expandD7v(child, prefix);
+			expandD7ModelExpr(child, prefix);
 		})
 	}
 	const makeRenderFunc = function (strHtml) {
@@ -293,11 +354,11 @@ let _d7Mode = 'dev';
 		var tpl = strHtml.replace(new RegExp(regstr, "gm"), function (m, cmtoutStart, start, expr, close, cmtoutClose) {
 				expr = expr.replace(/\\'/gm, "'").trim();
 				if (expr.startsWith("=<")) {
-					expr = expr.substring(2).trim();
+					expr = expr.substring(2);
 					return "'.replaceAll('_d7.', _d7name + '.') + this.util.encodeHtml(" + expr + ") + '";
 				}
 				if (expr.startsWith("=")) {
-					expr = expr.substring(1).trim();
+					expr = expr.substring(1);
 					if (expr === "_c.length-1") return "' + (" + expr + ") + '";
 					return "'.replaceAll('_d7.', _d7name + '.') + (" + expr + ") + '";
 				}
@@ -380,8 +441,8 @@ let _d7Mode = 'dev';
 		request.send(null);
 		return null;
 	}
-	const CSS_TAGS = [];
-	const SCRIPT_TAGS = [];
+	const DOC_TAGS_CSS = [];
+	const DOC_TAGS_SCRIPT = [];
 	const makeTemplate = function(strHtml) {
 		var divTemp = document.createElement("div");
 		divTemp.innerHTML = strHtml;
@@ -397,20 +458,14 @@ let _d7Mode = 'dev';
 		})
 		divTemp.querySelectorAll('[rel="stylesheet"]').forEach(function(css) {
 			var href = css.getAttribute('href');
-			if (!CSS_TAGS.includes(href)) {
-				cssTags.push(href);
-				CSS_TAGS.push(href);
-			}
+			cssTags.push(href);
 			css.remove();
 		})
 		// javascript
 		divTemp.querySelectorAll('script').forEach(function(script) {
 			var src = script.getAttribute('src');
 			if (src){
-				if (!SCRIPT_TAGS.includes(src)) {
-					scriptTags.push(src);
-					SCRIPT_TAGS.push(src);
-				}
+				scriptTags.push(src);
 			} else {
 				scriptCode += script.innerHTML + "\n;\n;\n;"
 			}
@@ -420,7 +475,11 @@ let _d7Mode = 'dev';
 		var mainblock = divTemp.querySelector('mainblock');
 		if (!mainblock) mainblock = divTemp.querySelector('[mainblock]');
 		if (mainblock) 	strHtml = mainblock.innerHTML;
-		else 			strHtml = divTemp.innerHTML;
+		else {
+			var head = divTemp.querySelector('head');
+			if (head) head.remove();
+			strHtml = divTemp.innerHTML;
+		}
 
 		return {
 			html: strHtml,
@@ -436,6 +495,9 @@ let _d7Mode = 'dev';
 
 		var headTag = document.querySelector('head');
 		for (var idx in template.cssTags) {
+			if (DOC_TAGS_CSS.includes(template.cssTags[idx])) continue;
+			DOC_TAGS_CSS.push(template.cssTags[idx]);
+
 			var newTag = document.createElement('link');
 			newTag.type = 'text/css';
 			newTag.setAttribute('rel', 'stylesheet');
@@ -451,6 +513,9 @@ let _d7Mode = 'dev';
 			headTag.appendChild(newTag);
 		}
 		for (var idx in template.scriptTags) {
+			if (DOC_TAGS_SCRIPT.includes(template.scriptTags[idx])) continue;
+			DOC_TAGS_SCRIPT.push(template.scriptTags[idx]);
+
 			var newTag = document.createElement('script');
 			newTag.type = 'text/javascript';
 			newTag.setAttribute('src', template.scriptTags[idx]);
@@ -475,7 +540,7 @@ let _d7Mode = 'dev';
 	 *   keyPath: "key1.key2[].key3[n][m].key4 ..."
 	 *   valAttr: priority[valAttr > value > innerHTML]
 	/*********************************************************************/
-	const tarContainer = function(currContainer, keys, arrayFlg) {
+	const dataContainer = function(currContainer, keys, arrayFlg) {
 		var fullKey = "R";
 		var finalPos = keys.length - 1;
 		for (var idx=0; idx<=finalPos; idx++) {
@@ -582,22 +647,6 @@ let _d7Mode = 'dev';
 		}
 		return currContainer;
 	}
-	const extractModelOld = function(selector) {
-		var modelData = {};
-		var arrayFlg = {};
-		this.querySelectorAll(selector ? (selector + " [_d7m]") : "[_d7m]").forEach(function(d7mTag) {;
-			var d7m = d7mTag.getAttribute('_d7m').replaceAll(" ", "");
-			if (!d7m) error("_d7m can not be empty! " + d7mTag.outerHTML);
-			if (d7m.startsWith("[")) error("_d7m can not starts with array " + d7mTag.outerHTML);
-
-			var accessKey = d7m.split(',');
-			var keys = accessKey[0].trim().replaceAll("[", ".[").replaceAll("..", ".").split(".");
-			var tc = tarContainer(modelData, keys, arrayFlg);
-			tc[keys[keys.length-1]] = d7mTag.val(accessKey[1] || '');
-		})
-
-		return modelData;
-	}
 	const extractModel = function(tarBlock, modelData, arrayFlg) {
 		var d7m = tarBlock.getAttribute('_d7m');
 		if (d7m) {
@@ -606,8 +655,8 @@ let _d7Mode = 'dev';
 	
 			var accessKey = d7m.split(',');
 			var keys = accessKey[0].trim().replaceAll("[", ".[").replaceAll("..", ".").split(".");
-			var tc = tarContainer(modelData, keys, arrayFlg);
-			tc[keys[keys.length-1]] = tarBlock.val(accessKey[1] || '');
+			var dc = dataContainer(modelData, keys, arrayFlg);
+			dc[keys[keys.length-1]] = tarBlock.val(accessKey[1] || '');
 		}
 
 		// must be sequentially!
@@ -617,7 +666,6 @@ let _d7Mode = 'dev';
 
 		return modelData;
 	}
-
 	/*********************************************************************
 	 * Dinosaur7's public function
 	 *   fn.onload(fOnload)
@@ -659,7 +707,6 @@ let _d7Mode = 'dev';
 		var arrayFlg = {};
 		extractModel(this.s(selector), modelData, arrayFlg);
 		return modelData;
-		//return extractModelOld.call(this._PRIVATE.ROOT, selector);
 	}
 	/***
 	 * render model data to elements
@@ -670,16 +717,8 @@ let _d7Mode = 'dev';
 		var tpltBlock = this._PRIVATE.TPLT.s(blockSelector);
 		if (!tpltBlock) error("target block not exists. " + blockSelector);
 
-		var htmlContainer = document.createElement("div");
-		var tags = (_TYPECONTAINER[tpltBlock.tagName] || "").split(" ");
-		for (var idx in tags) {
-			if (!tags[idx]) break;
-
-			var tempTag = document.createElement(tags[idx]);
-			htmlContainer.append(tempTag);
-			htmlContainer = tempTag;
-		}
 		var valContainer = [];
+		var htmlContainer = makeContainerTag(tpltBlock.tagName);
 		htmlContainer.innerHTML = buildBlock.call(this, blockSelector)(modelData || {}, valContainer, this.fullname);
 
 		// データを埋め込む
@@ -967,10 +1006,10 @@ let _d7Mode = 'dev';
 		return _d7Popup;
 	}
 	/***
-	 * var detailModal = _d7.openModal("/detail.html", parameters, true|false);
+	 * var detailModal = _d7.modal("/detail.html", parameters, true|false);
 	 * detailModal.handleOk = function() {}
 	 */
-	fn.openmodal = function (url, params, autoClose) {
+	fn.modal = function (url, params, autoClose) {
 		var modal = new Modal("modal", autoClose);
 		modal.form.setAttribute("compsrc", url);
 		modal.form.setAttribute("compseq", 999); // synch
@@ -1120,12 +1159,12 @@ let _d7Mode = 'dev';
 
 		// css, javascript
 		document.querySelectorAll('[rel="stylesheet"]').forEach(function(css) {
-			CSS_TAGS.push(css.getAttribute('href'));
+			DOC_TAGS_CSS.push(css.getAttribute('href'));
 		})
 		document.querySelectorAll('script').forEach(function(script) {
 			var src = script.getAttribute('src');
 			if (src){
-				SCRIPT_TAGS.push(src);
+				DOC_TAGS_SCRIPT.push(src);
 			}
 		})
 
