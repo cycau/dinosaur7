@@ -1,7 +1,7 @@
 /***
- * message box
- * you can define initial, showing, closing effect
- * @version 2.9
+ * popup
+ * you can modify this to define initial, showing, closing effect
+ * @version 2.1
  ***/
  ._d7_popup_overlay {
 	visibility: hidden;
@@ -47,7 +47,6 @@
 
 /***
  * modal
- * you can define initial, showing, closing effect
  ***/
 ._d7_modal_overlay {
 	visibility: hidden;
