@@ -4,6 +4,7 @@ let _d7Mode = 'dev';
  * @author kougen.sai
  * @author cycauo@gmail.com
  * @version 2.1
+ * @keyword React Vue Angular
  * The name [Dinosaur7] comes from that
  * my daughter likes dinosaurs very much and she is 7 years old.
  * this framework help you to implement SPA without complex knowledge.
@@ -55,33 +56,29 @@ let _d7Mode = 'dev';
  *   Element.attr(strProp|empty, val|null)
 /*/
 (function (global) {
-	const debug = function(msg) {
-		if (_d7Mode !== 'dev') return;
-		console.info( "[Dinosaur7]debug: " + msg);
-	}
 	const error = function(msg) {
 		if (_d7Mode === 'dev') alert(msg);
-		console.error("[Dinosaur7]error! " + msg);
+		throw new Error("[Dinosaur7]error! " + msg);
 	}
 
 	class Dinosaur7 {
 		constructor(fullname, params) {
 			this.fullname = fullname;
 			this.params = params;
-			this.conf = {pageRoot: "", apiRoot: ""};
-			this._PRIVATE = {showed:false};
-			this._CACHE = {funcRender:{}}; // cache compiled function
+			this.conf = {pagebase: "", apibase: ""};
 			this.childseq = 0;
 			this.children = {};
+			this._WORK = {showed:false};
+			this._CACHE = {funcRender:{}}; // cache compiled function
 
 			this.assignBlock = function(tarBlock) {
 				tarBlock.setAttribute('_d7name', fullname);
 				tarBlock.querySelectorAll("[_d7=DUMMY]").forEach(function(dummyBlock) {
 					dummyBlock.remove();
 				})
-				this._PRIVATE.ROOT = tarBlock;
-				this._PRIVATE.TPLT = document.createElement("div");
-				this._PRIVATE.TPLT.innerHTML = tarBlock.innerHTML;
+				this._WORK.ROOT = tarBlock;
+				this._WORK.TPLT = document.createElement(tarBlock.tagName);
+				this._WORK.TPLT.innerHTML = tarBlock.innerHTML;
 			}
 		}
 	}
@@ -93,17 +90,14 @@ let _d7Mode = 'dev';
 		start: "{%",	// {% =varOrFunction %} 	describe output
 		close: "%}",	// {% =<varOrFunction %} 	encode and output
 	}
-	const _ENCODE = {
-		"<": "&#60;", 
-		">": "&#62;", 
-		"&": "&#26;", 
-		'"': "&#34;", 
-		"'": "&#39;", 
-		"/": "&#47;",
-		" ": "&#20;", //&emsp;
-		"\t": "&#09;",
-		"\n": "&#a0;",
-		"\r": "&#d0;",
+	const _HTMLENCODE = {
+		"<": "&lt;", 
+		">": "&gt;", 
+		"&": "&amp;", 
+		'"': "&quot;", 
+		"'": "&#39;",
+		" ": "&nbsp;",
+		"　": "&emsp;",
 	};
 	const _TYPECONTAINER = {
 		"CAPTION": "table", 
@@ -168,9 +162,9 @@ let _d7Mode = 'dev';
 		if (!selector) selector = "_d7Root"
 		if (this._CACHE.funcRender[selector]) return this._CACHE.funcRender[selector];
 
-		var tarBlock = this._PRIVATE.TPLT;
+		var tarBlock = this._WORK.TPLT;
 		if (selector !== "_d7Root") {
-			var blocks = this._PRIVATE.TPLT.querySelectorAll(selector);
+			var blocks = this._WORK.TPLT.querySelectorAll(selector);
 			if (blocks.length < 1) {
 				error("not found target block with selector [" + selector + "]");
 				return;
@@ -383,16 +377,17 @@ let _d7Mode = 'dev';
 		currD7.childseq++;
 		var childName = currD7.fullname + '.children.c' + currD7.childseq;
 		var child = new Dinosaur7(childName, params);
+		for(var key in _d7root.conf) child.conf[key] = _d7root.conf[key];
 		currD7.children['c'+currD7.childseq] = child;
 		return child;
 	}
 	const deleteComp = function(fullname) {
-		var _d7temp = _d7;
+		var _d7temp = _d7root;
 		var _d7path = fullname.split('.');
-		for (var idx=1; idx<(_d7path.length-1); idx++) {
-			_d7temp = _d7temp[_d7path[idx]];
+		for (var idx=3; idx<_d7path.length; idx+=2) {
+			_d7temp = _d7temp.children[_d7path[idx-1]];
 		}
-		delete _d7temp[_d7path[_d7path.length-1]];
+		delete _d7temp.children[_d7path[_d7path.length-1]];
 
 		document.querySelectorAll('[_d7nameref]').forEach(function(tag) {
 			// remove css or script even children's'.
@@ -441,8 +436,8 @@ let _d7Mode = 'dev';
 		request.send(null);
 		return null;
 	}
-	const DOC_TAGS_CSS = [];
-	const DOC_TAGS_SCRIPT = [];
+	const ROOT_TAGS_CSS = [];
+	const ROOT_TAGS_SCRIPT = [];
 	const makeTemplate = function(strHtml) {
 		var divTemp = document.createElement("div");
 		divTemp.innerHTML = strHtml;
@@ -495,8 +490,8 @@ let _d7Mode = 'dev';
 
 		var headTag = document.querySelector('head');
 		for (var idx in template.cssTags) {
-			if (DOC_TAGS_CSS.includes(template.cssTags[idx])) continue;
-			DOC_TAGS_CSS.push(template.cssTags[idx]);
+			if (ROOT_TAGS_CSS.includes(template.cssTags[idx])) continue;
+			ROOT_TAGS_CSS.push(template.cssTags[idx]);
 
 			var newTag = document.createElement('link');
 			newTag.type = 'text/css';
@@ -513,8 +508,8 @@ let _d7Mode = 'dev';
 			headTag.appendChild(newTag);
 		}
 		for (var idx in template.scriptTags) {
-			if (DOC_TAGS_SCRIPT.includes(template.scriptTags[idx])) continue;
-			DOC_TAGS_SCRIPT.push(template.scriptTags[idx]);
+			if (ROOT_TAGS_SCRIPT.includes(template.scriptTags[idx])) continue;
+			ROOT_TAGS_SCRIPT.push(template.scriptTags[idx]);
 
 			var newTag = document.createElement('script');
 			newTag.type = 'text/javascript';
@@ -526,7 +521,7 @@ let _d7Mode = 'dev';
 		d7Comp.assignBlock(compTag);
 		(new Function("_d7", template.script))(d7Comp);
 		if (typeof d7Comp._funcOnload !== 'function') {
-			if (!d7Comp._PRIVATE.showed) {
+			if (!d7Comp._WORK.showed) {
 				d7Comp.show();
 			}
 		}
@@ -578,7 +573,11 @@ let _d7Mode = 'dev';
 					return currContainer;
 				}
 
-				if (currContainer.length <1) return error(`forgot specify new array flag? ${fullKey}[+]`);
+				if (currContainer.length <1) {
+					fullKey = fullKey.substring(2);
+					error(`forgot specify new array flag?\n   _d7m="${fullKey}[+].key" \nor _d7m="${fullKey}[].key,0" \nor _d7v="=m.${fullKey}[var].key,0" _d7m=",0"`);
+					return;
+				}
 				
 				// last key[][], key[].key2
 				currContainer = currContainer[currContainer.length-1];
@@ -685,43 +684,45 @@ let _d7Mode = 'dev';
 	const fn = Dinosaur7.prototype;
 	fn.onload = function(funcOnload) {
 		var currD7 = this;
-		this._PRIVATE._funcOnload = function() {
+		this._WORK._funcOnload = function() {
 			funcOnload.call(currD7);
 		}
-		if (this._PRIVATE.ROOT) this._PRIVATE._funcOnload(currD7);
+		if (this._WORK.ROOT) this._WORK._funcOnload(currD7);
 	}
 	fn.s = function(selector, index) {
-		if (!selector) return this._PRIVATE.ROOT;
-		if (typeof index === 'undefined') return this._PRIVATE.ROOT.querySelector(selector);
+		if (!selector) return this._WORK.ROOT;
+		if (typeof index === 'undefined') return this._WORK.ROOT.querySelector(selector);
 
-		var elements = this._PRIVATE.ROOT.querySelectorAll(selector);
+		var elements = this._WORK.ROOT.querySelectorAll(selector);
 		if (elements.length < (index+1)) return null;
 		return elements[index];
 	}
 	fn.S = function(selector) {
-		if (!selector) return [this._PRIVATE.ROOT];
-		return this._PRIVATE.ROOT.querySelectorAll(selector);
+		if (!selector) return [this._WORK.ROOT];
+		return this._WORK.ROOT.querySelectorAll(selector);
 	}
 	fn.m = function(selector) {
+		var tarBlock = this.s(selector);
+		if (!tarBlock) error('target block not exists. ' + selector);
 		var modelData = {};
 		var arrayFlg = {};
-		extractModel(this.s(selector), modelData, arrayFlg);
+		extractModel(tarBlock, modelData, arrayFlg);
 		return modelData;
 	}
 	/***
 	 * render model data to elements
 	/*/
 	const virtualRender = function(modelData, blockSelector) {
-		if (!this._PRIVATE.TPLT) error("not onload yet.");
+		if (!this._WORK.TPLT) error("not onload yet.");
 
-		var tpltBlock = this._PRIVATE.TPLT.s(blockSelector);
-		if (!tpltBlock) error("target block not exists. " + blockSelector);
+		var tpltBlock = this._WORK.TPLT.s(blockSelector);
+		if (!tpltBlock) error("target block not exists in template. " + blockSelector);
 
 		var valContainer = [];
 		var htmlContainer = makeContainerTag(tpltBlock.tagName);
-		htmlContainer.innerHTML = buildBlock.call(this, blockSelector)(modelData || {}, valContainer, this.fullname);
+		htmlContainer.innerHTML = buildBlock.call(this, blockSelector)(modelData, valContainer, this.fullname);
 
-		// データを埋め込む
+		// embed value
 		htmlContainer.querySelectorAll("[_d7v]").forEach(function(d7vTag) {
 			var idx = d7vTag.getAttribute('_d7vi');
 			var d7v = d7vTag.getAttribute('_d7v').split(',');
@@ -739,9 +740,10 @@ let _d7Mode = 'dev';
 	}
 	fn.render = function(modelData, blockSelector) {
 		var currD7 = this;
-		var virtualBlock = virtualRender.call(currD7, modelData, blockSelector);
+		var virtualBlock = virtualRender.call(currD7, modelData || {}, blockSelector);
 
-		var tarBlock = currD7._PRIVATE.ROOT.s(blockSelector);
+		var tarBlock = currD7._WORK.ROOT.s(blockSelector);
+		if (!tarBlock) error('target block not exists.');
 		tarBlock.innerHTML = virtualBlock.innerHTML;
 		tarBlock.querySelectorAll("[compsrc]").forEach(function(compTag) {
 			if (compTag.hasAttribute("solidblock")) return;
@@ -752,22 +754,25 @@ let _d7Mode = 'dev';
 	// insert before target Child.
 	fn.renderTo = function(modelData, srcSelector, srcChildSlector, tarSelector, tarChildSlector) {
 		var currD7 = this;
-		var virtualBlocks = [virtualRender.call(currD7, modelData, srcSelector)];
-		if (srcChildSlector) {
-			virtualBlocks = virtualBlocks[0].querySelectorAll(srcChildSlector);
-		}
-
+		var srcBlock = virtualRender.call(currD7, modelData || {}, srcSelector);
 		var tarBlock = currD7.s(tarSelector);
-		if (!tarBlock) error('tarBlock can not be empty.');
-
-		if (!tarChildSlector) {
-			for (var idx=0; idx<virtualBlocks.length; idx++) {
-				tarBlock.insertBefore(virtualBlocks[idx], null);
-			}
+		if (!tarBlock) error('target block not exists.');
+		if (!srcChildSlector && !tarChildSlector) {
+			tarBlock.innerHTML = srcBlock.innerHTML;
 		} else {
-			var tarChild = tarBlock.querySelector(tarChildSlector);
-			for (var idx=0; idx<virtualBlocks.length; idx++) {
-				tarChild.parentNode.insertBefore(virtualBlocks[idx], tarChild);
+			var srcBlockChildren = srcBlock.children;
+			if (srcChildSlector) srcBlockChildren = srcBlock.querySelectorAll(srcChildSlector);
+	
+	
+			if (!tarChildSlector) {
+				for (var idx=0; idx<srcBlockChildren.length; idx++) {
+					tarBlock.insertBefore(srcBlockChildren[idx], null);
+				}
+			} else {
+				var tarChild = tarBlock.querySelector(tarChildSlector);
+				for (var idx=0; idx<srcBlockChildren.length; idx++) {
+					tarChild.parentNode.insertBefore(srcBlockChildren[idx], tarChild);
+				}
 			}
 		}
 
@@ -794,7 +799,7 @@ let _d7Mode = 'dev';
 	 * show(true|false)
 	/*/
 	fn.show = function(visible) {
-		if (!_d7root._PRIVATE.showed) {
+		if (!_d7root._WORK.showed) {
 			if (document.body) {
 				document.body.style.display = "block";
 				document.body.style.visibility = "visible";
@@ -802,25 +807,25 @@ let _d7Mode = 'dev';
 				var firstBlock = document.querySelector("header +");
 				firstBlock.style.display = "block";
 			}
-			_d7root._PRIVATE.showed = true;
+			_d7root._WORK.showed = true;
 		}
-		this._PRIVATE.showed = true;
 
 		if (visible === false) {
-			this._PRIVATE.ROOT.style.display = "none";
+			this._WORK.ROOT.style.display = "none";
 		} else {
-			this._PRIVATE.ROOT.style.display = "block";
+			this._WORK.ROOT.style.display = "block";
 		}
+		this._WORK.showed = true;
 	};
 	/***
 	 * single page mode
 	/*/
-	fn.loadpage = function(url, parameters) {
-		var tarTag = _d7root._PRIVATE.ROOT;
-		tarTag.setAttribute("compsrc", _d7root.conf.pageRoot + url);
+	fn.loadpage = function(url, params) {
+		var tarTag = _d7root._WORK.ROOT;
+		tarTag.setAttribute("compsrc", _d7root.conf.pagebase + url);
 		//tarTag.setAttribute("compseq", 999); // synch
 
-		loadExComp.call(_d7root, tarTag, parameters);
+		loadExComp.call(_d7root, tarTag, params);
 	}
 	/***
 	 * HTTP request
@@ -829,17 +834,17 @@ let _d7Mode = 'dev';
 	/*/
 	fn.api = function(url, paramMap, options, onSuccess, onError) {
 		processing();
-
 		var currD7 = this;
 
 		if (!options) options = {};
 		if (!options.method) options.method = "GET";
 		if (!options.responseType) options.responseType = "JSON";
+		if (!options.header) options.header = {};
 		options.method = options.method.toUpperCase();
 		options.responseType = options.responseType.toUpperCase();
-		if (options.method == "GET") url = this.util.tringifyUrl(url, paramMap);
+		if (options.method == "GET") url = this.util.stringifyUrl(url, paramMap);
 
-		url = _d7root.conf.apiRoot + url;
+		url = currD7.conf.apibase + url;
 		var xhr = new XMLHttpRequest();
 		xhr.onload = function() {
 			var response;
@@ -851,29 +856,32 @@ let _d7Mode = 'dev';
 				}
 			}catch (e) {
 				if (options.responseType == "JSON") {
-					response = {_exception: 1};
+					response = {_error: 'JsonParse'};
 					response.response = xhr.responseText;
 				} else {
-					response = "ERROR!";
+					response = xhr.responseText;
 				}
 			}
 			if (xhr.status == 200) {
-				if (onSuccess) onSuccess.call(currD7, response, xhr.status);
+				if (onSuccess) onSuccess.call(currD7, response);
 			} else {
 				if (onError) onError.call(currD7, response, xhr.status);
-				error("http: " + options.method + " " + url + " status[" + xhr.status + "]");
+				error(`http:${options.method} ${url} status[${xhr.status}]`);
 			}
 			processing(false);
 		}
 		xhr.onerror = function() {
-			if (onError) onError.call(currD7, null, 0);
-			error("http: " + options.method + " " + url + " status[failed]");
+			if (onError) onError.call(currD7, xhr.responseText, xhr.status);
+			error(`http:${options.method} ${url} status[failed]`);
 			processing(false);
 		}
 		xhr.open(options.method, url);
+		for (var key in options.header) {
+			xhr.setRequestHeader(key, options.header[key]);
+		}
 		xhr.setRequestHeader("Content-Type", "application/json; charset=utf-8");
 		//xhr.responseType = 'json';
-		xhr.send(options.method == "POST" ? JSON.stringify(paramMap) : null);
+		xhr.send(options.method === "GET" ? null : JSON.stringify(paramMap));
 	}
 
 	/*********************************************************************
@@ -897,9 +905,9 @@ let _d7Mode = 'dev';
 	}
 	fn.util = {};
 	fn.util.encodeHtml = function(strHtml) {
-		strHtml = strHtml + '';
-		strHtml = strHtml.replace(/[<>"'\/]/g, function (c) { 
-			return _ENCODE[c]; 
+		strHtml = strHtml || '';
+		strHtml = strHtml.replace(/./g, function (c) {
+			return _HTMLENCODE[c] || c; 
 		});
 		return strHtml
 	};
@@ -926,15 +934,34 @@ let _d7Mode = 'dev';
 	}
 	fn.util.emitEvent = function(selector, eventName, val) {
 		var element = document.querySelector(selector);
-		if (!element) error("target not found in sendEvent. " + selector);
+		if (!element) error("target not found in emitEvent. " + selector);
+		if (eventName.startsWith("on")) eventName = eventName.substring(2);
 		element.dispatchEvent(new Event(eventName, val));
 	}
-	fn.util.persistVal = function(key, data) {
-		if (typeof data === 'undefined') {
-			return localStorage.getItem(key);
-		}
+	fn.util.persistVal = function(key, val) {
+		try {
+			localStorage.setItem('dummytest', '1');
+			if (localStorage.getItem('dummytest') === '1') {
+				if (typeof val === 'undefined') return localStorage.getItem(key);
+				localStorage.setItem(key, val);
+				if (val != null) localStorage.setItem(key, val);
+				else localStorage.removeItem(key);
+				return;
+			}
+		} catch(e) {;}
 
-		localStorage.setItem(key, data);
+		if (typeof val === 'undefined') {
+			var keyvals = {};
+			(document.cookie || '').split('; ').forEach(function(keyval) {
+	            var data = keyval.split('=');
+	            keyvals[data[0]] = decodeURIComponent(data[1]);
+			});
+			return keyvals[key];
+		}
+		var expires = new Date();
+		if (val != null) expires.setTime(expires.getTime() + 365*24*60*60*1000);
+		else expires.setTime(expires.getTime() - 1000);
+		document.cookie = `${key}=${encodeURIComponent(val)}; expires=${expires.toGMTString()}`;
 	}
 	/*********************************************************************
 	 * popup(msgbox) | modal | processing
@@ -981,7 +1008,7 @@ let _d7Mode = 'dev';
 		var d7name = this.form.getAttribute('_d7name');
 		setTimeout(function(container, d7name) {
 			document.body.removeChild(container);
-			deleteComp(d7name);
+			if (d7name) deleteComp(d7name);
 		}, 300, this.container, d7name);
 	}
 	/***
@@ -1056,87 +1083,111 @@ let _d7Mode = 'dev';
 	 * Element.attr(strProp, val|nullToDelete)
 	/**********************************************************************/
 	// selectOne
-	Element.prototype.s = function(selector, index) {
+	Element.prototype.s = function(selector, tarNo) {
 		if (!selector) return this;
-		if (typeof index === 'undefined') return this.querySelector(selector);
+		if (typeof tarNo === 'undefined') return this.querySelector(selector);
 
 		var elements = this.querySelectorAll(selector);
-		if (elements.length < (index+1)) return null;
-		return elements[index];
+		if (elements.length < (tarNo)) return null;
+		return elements[tarNo-1];
 	}
 	// selectAll
 	Element.prototype.S = function(selector) {
-		if (!selector) return this._PRIVATE.ROOT;
-		return this._PRIVATE.ROOT.querySelectorAll(selector);
+		if (!selector) return [this];
+		return this.querySelectorAll(selector);
 	}
 	// value priority[strAttr > value > innerHTML]
-	Element.prototype.val = function(strAttr, val) {
+	Element.prototype.val = function(attr, val) {
 		//getter
 		if (typeof val === 'undefined') {
-			if (strAttr) {
-				if (strAttr === 'text' || strAttr === 'innerHTML') return this.innerHTML;
-				else return this.getAttribute(strAttr);
+			if (attr) {
+				if (attr === 'text' || attr === 'innerHTML') return this.innerHTML;
+				return this.getAttribute(attr);
 			}
 			if (typeof this.value !== 'undefined') return this.value;
-			else return this.innerHTML;
+			return this.innerHTML;
 		}
 		// setter
-		if (strAttr) {
-			if (strAttr == 'text' || strAttr === 'innerHTML') {this.innerHTML = val; return this;}
-			else {this.setAttribute(strAttr, val); return this;}
+		if (attr) {
+			if (attr == 'text' || attr === 'innerHTML') {this.innerHTML = val; return this;}
+			this.setAttribute(attr, val);
+			return this
 		}
 		if (typeof this.value !== 'undefined') {this.value = val; return this;}
-		this.innerHTML = val; return this;
+		this.innerHTML = val;
+		return this;
 	}
 	// style
 	Element.prototype.css = function(propOrMap, val) {
-		if (typeof propOrMap === 'undefined') return this.style;
+		if (typeof propOrMap === 'undefined') {
+			var css = {};
+			(this.style.cssText || '').split(';').forEach(function(str){
+				var cssunit = str.split(':');
+				if (cssunit.length < 2) return;
+				css[cssunit[0].trim()] = cssunit[1].trim();
+			})
+			return css;
+		}
 		if (typeof val === 'undefined') {
 			if (typeof propOrMap === 'string') return this.style[propOrMap];
-			else {this.style = propOrMap; return this;}
+			for (var key in propOrMap) {
+				this.style[key] = propOrMap[key];
+			}
+			return this;
 		}
 		if (typeof propOrMap !== 'string') error('[propOrMap] must be a string when set or remove.');
-		if (val === null) {this.style[propOrMap] = null; return this;}
-		this.style[propOrMap] = val; return this;
+		if (val === null) {
+			this.style[propOrMap] = null;
+			return this;
+		}
+		this.style[propOrMap] = val;
+		return this;
 	};
 	// class
 	Element.prototype.clazz = function(classOrList, val) {
-		if (typeof classOrList === 'undefined') return this.classList;
+		if (typeof classOrList === 'undefined') {
+			var clazz = [];
+			for (var idx=0; idx < this.classList.length; idx++) {
+				clazz.push(this.classList[idx]);
+			}
+			return clazz;
+		}
 		if (typeof val === 'undefined') {
 			if (typeof classOrList === 'string') return this.classList.contains(classOrList);
-			else {this.classList = classOrList; return this;}
+			for (var idx=0; idx < classOrList.length; idx++) {
+				this.classList.add(classOrList[idx]);
+			}
+			return this;
 		}
 		if (typeof classOrList !== 'string') error('[classOrList] must be a string when add or remove.');
-		if (val === null) {this.classList.remove(classOrList); return this;}
-		this.classList.add(classOrList); return this;
+		if (val === null) {
+			this.classList.remove(classOrList);
+			return this;
+		}
+		this.classList.add(classOrList);
+		return this;
 	}
 	// attribute
-	Element.prototype.attr = function(strProp, val) {
-		if (!strProp) error('[strProp] can not be empty.');
+	Element.prototype.attr = function(prop, val) {
+		if (!prop) error('[prop] can not be empty.');
 		if (typeof val === 'undefined') {
-			if (!this.hasAttribute(strProp)) return null;
-			else return this.getAttribute(strProp) || '';
+			if (!this.hasAttribute(prop)) return null;
+			return this.getAttribute(prop) || '';
 		}
-		if (val === null) {this.removeAttribute(strProp); return this;}
-		this.setAttribute(strProp, val); return this;
+		if (val === null) {
+			this.removeAttribute(prop);
+			return this;
+		}
+		this.setAttribute(prop, val);
+		return this;
 	}
 
 	/*********************************************************************
-	 * to publish.
+	 * load.
 	/*********************************************************************/
-	// apply to multy platform
-	const publish = function(obj, name) {
-		if (typeof exports === 'object' && typeof module !== 'undefined') { 
-			module.exports = obj; // CommonJS
-		} else if (typeof define === 'function') { 
-			define(function () { return obj; }); // AMD
-		} else {
-			global[name] = obj; // WINDOWS
-		}
-	}
 	const _d7 = new Dinosaur7('_d7', parseQuery(window.location.href));
-	global._d7root = global._d7 = _d7;
-	const mainInit = function() {
+	global._d7 = global._d7root = _d7;
+	const rootInit = function() {
 		var mainBlock = document.querySelector("mainblock");
 		if (!mainBlock) mainBlock = document.querySelector("[mainblock]");
 		if (!mainBlock) error('mainblock not defined.');
@@ -1159,18 +1210,18 @@ let _d7Mode = 'dev';
 
 		// css, javascript
 		document.querySelectorAll('[rel="stylesheet"]').forEach(function(css) {
-			DOC_TAGS_CSS.push(css.getAttribute('href'));
+			ROOT_TAGS_CSS.push(css.getAttribute('href'));
 		})
 		document.querySelectorAll('script').forEach(function(script) {
 			var src = script.getAttribute('src');
 			if (src){
-				DOC_TAGS_SCRIPT.push(src);
+				ROOT_TAGS_SCRIPT.push(src);
 			}
 		})
 
 		// asynch first.
 		for(var idx=0; idx<exCompAsynch.length; idx++) {
-			loadExComp.call(_d7, exCompAsynch[idx]);
+			loadExComp.call(_d7root, exCompAsynch[idx]);
 		}
 		// synchronize with priority.
 		exComp.sort(function(e1, e2) {
@@ -1181,28 +1232,30 @@ let _d7Mode = 'dev';
 			return 0;
 		});
 		for(var idx=0; idx<exComp.length; idx++) {
-			loadExComp.call(_d7, exComp[idx]);
+			loadExComp.call(_d7root, exComp[idx]);
 		}
 
-		_d7.assignBlock(mainBlock);
-		if (_d7._PRIVATE.ROOT.hasAttribute("solidblock")) {
-			typeof _d7._PRIVATE._funcOnload ? _d7._PRIVATE._funcOnload.call(_d7) : _d7.show(true);
+		_d7root.assignBlock(mainBlock);
+		if (_d7root._WORK.ROOT.hasAttribute("solidblock")) {
+			typeof _d7root._WORK._funcOnload ? _d7root._WORK._funcOnload.call(_d7root) : _d7root.show(true);
 			return;
 		}
-		if (!_d7.conf.pageRoot) error('must define page root. _d7.conf.pageRoot = "/xxx"');
+		if (!_d7root.conf.pagebase) error('should specify [solidblock] in <mainblock> or define page\'s html root in SPA mode such as _d7.conf.pagebase = "/html/page". ');
 
-		_d7.loadpage(window.location.pathname, parseQuery(window.location.href));
+		_d7root.loadpage(window.location.pathname, parseQuery(window.location.href));
 	}
-	// assign to system's onload
+
+
 	switch (document.readyState) {
 		case "loading":
 			document.addEventListener('DOMContentLoaded', function () {
-				mainInit();
-				// window.addEventListener("load", function () {}); // after image css loaded.
+				rootInit();
+				// after image css loaded.
+				// window.addEventListener("load", function () {});
 			});
 			break;
 		default : // interactive, complete
-			mainInit();
+			rootInit();
 			break;
 	}
 })(this);
