@@ -1,6 +1,7 @@
 # dinosaur7
 作成中・・・
 汚いですが、testフォルダをご覧になったほうがはやいかもです。
+SPAモードでもレガシーモード（商品ページ等）でも動かせますよ。
 
 ```
 @keyword React Vue Angular simple pure html client
