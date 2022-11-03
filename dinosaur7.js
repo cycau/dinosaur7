@@ -4,56 +4,56 @@ let _d7Mode = 'dev';
  * @author kougen.sai
  * @author cycauo@gmail.com
  * @version 2.1
- * @keyword React Vue Angular
- * The name [Dinosaur7] comes from that
- * my daughter likes dinosaurs very much and she is 7 years old.
- * this framework help you to implement SPA without complex knowledge.
+ * @keyword React Vue Angular simple pure html client
+ * this framework help you to implement SPA with basic skill no longer need to hard work.
+ * The name [Dinosaur7] comes from that My daughter loves dinosaurs and is 7 years old.
  *
- * Dinosaur7's all symbol in html
- *   [_d7] 		if | for | DUMMY.
- *   [_d7v] 	show Model data to html.
- *   [_d7m] 	collect html value to Model data.
- *   [compsrc] 	specify external html resource of template.
- *   [compseq] 	loading priority of template, specify this will load in synchronize mode.
- *   [mainblock] to specify main page content.
+ * Dinosaur7's all symbols you can specify in html tag
+ *   [_d7] 		specify [if | for | DUMMY] to control rendering html block.
+ *   [_d7v] 	specify key to show Model data to html's tag.
+ *   [_d7m] 	specify key to collect html value to a Map as ModelData.
+ *   [compsrc] 	specify external component resource that includes html and script.
+ *   [compseq] 	priority for loading component, specify this will load in synchronize mode.
+ *   [mainblock] To specify main page content. in SAP mode only mainblock will show as page.
+ *   [solidblock] To tell Dinosaur7 that block don't need to load from remote.
  *
  *   {%  javascript logic %}
- *   {%= print value %}
+ *   {%= print value to html %}
  *   {%=<print value with encode %}
  *
- * Dinosaur7's all method
- *   fn.onload(function)
- *   fn.s(selector, index)
- *   fn.S(selector)
- *   fn.m(empty|selector) => target block's model data
- *   fn.render(ModelData, empty|selector)
+ * Dinosaur7's all javascript method
+ *   fn.onload(funcOnload) 					run funcOnload on load event.
+ *   fn.s(selector, empty|tarNo)			select one element.
+ *   fn.S(selector) 						select all element.
+ *   fn.m(empty|selector) 					collect target block's data as Map.
+ *   fn.render(ModelData, empty|selector)	render data to target block.
  *   fn.renderTo(ModelData, srcSelector, empty|srcChildSlector, tarSelector, empty|tarChildSlector)
- *   fn.remove(selector, empty|childIndex)
+ *   fn.remove(selector, empty|childIndex)	remove one element.
  *
  *   fn.show(empty|false)
- *   fn.loadpage(url, parameters)
- *   fn.api(url, params, options, onSuccess, onError)
+ *   fn.loadpage(url, empty|params)			load a component as page to mainblock.
+ *   fn.api(url, params, empty|options, empty|onSuccess, empty|onError)
  * 
- *   fn.popup(selector, parameters, autoClose)
- *   fn.modal(url, parameters, autoClose)
- *   fn.processing(empty|false)
+ *   fn.popup(selector, params, autoClose)	popup current html block.
+ *   fn.loadmodal(url, params, autoClose)	load a component and show in modal mode.
+ *   fn.processing(empty|false)				show loading icon.
  * 
- * Dinosaur7's util
+ * Dinosaur7's util method
  *   fn.util.encodeHtml(strHtml)
- *   fn.util.stringifyUrl(url, queryMap)
+ *   fn.util.stringifyUrl(url, params)
  *   fn.util.stringifyJSON(data)
  *   fn.util.parseJSON(strJSON)
- *   fn.util.format(value, fmt, prefix, suffix)
+ *   fn.util.format(value, fmt, fmtEx)			,|comma|date|datetime|time
  *   fn.util.emitEvent(selector, eventName, val)
- *   fn.util.persist(key, value)
+ *   fn.util.persistVal(key, empty|value)		save to localStorage or cookie.
  * 
  * Expand native Element's method
- *   Element.s(selector, empty|index)
+ *   Element.s(selector, empty|tarNo)
  *   Element.S(selector)
- *   Element.val(strAttr, val)
- *   Element.css(propOrMap|empty, val|null)
- *   Element.clazz(classOrList|empty, val|null)
- *   Element.attr(strProp|empty, val|null)
+ *   Element.val(strAttr, val)					setter/getter
+ *   Element.css(propOrMap|empty, val|null)		setter/getter, null value to remove
+ *   Element.clazz(classOrList|empty, val|null)	setter/getter, null value to remove
+ *   Element.attr(strProp|empty, val|null)		setter/getter, null value to remove
 /*/
 (function (global) {
 	const error = function(msg) {
@@ -273,7 +273,8 @@ let _d7Mode = 'dev';
 				d7m = d7m.substring(0,pos[0]+1) + '+' + d7m.substring(pos[1]);
 				startPos = pos[0] + 3;
 			}
-			d7mTag.setAttribute('_d7m', d7m);
+			var valAttr = newArrayFlg[1] || '';
+			d7mTag.setAttribute('_d7m', isNaN(valAttr) ? (d7m + ',' + valAttr) : '');
 		});
 		/***
 		 * replace logicKey in string mode.
@@ -667,19 +668,6 @@ let _d7Mode = 'dev';
 	}
 	/*********************************************************************
 	 * Dinosaur7's public function
-	 *   fn.onload(fOnload)
-	 *   fn.s(selector)
-	 *   fn.S(selector)
-	 * 
-	 *   fn.m(selector|empty)
-	 *   fn.render(modelData, blockSelector|empty)
-	 *   fn.renderTo(modelData, srcSelector, srcChildSlector|empty, tarSelector, tarChildSlector|empty)
-	 *   fn.remove(selector, childIndex|empty)
-	 * 
-	 *   fn.show(visible)
-	 *   fn.newPage(url)
-	 *   fn.newModal(url, queryMap, model)
-	 *   fn.api(url, paramMap, onSuccess, onError)
 	/*********************************************************************/
 	const fn = Dinosaur7.prototype;
 	fn.onload = function(funcOnload) {
@@ -689,13 +677,13 @@ let _d7Mode = 'dev';
 		}
 		if (this._WORK.ROOT) this._WORK._funcOnload(currD7);
 	}
-	fn.s = function(selector, index) {
+	fn.s = function(selector, tarNo) {
 		if (!selector) return this._WORK.ROOT;
-		if (typeof index === 'undefined') return this._WORK.ROOT.querySelector(selector);
+		if (typeof tarNo === 'undefined') return this._WORK.ROOT.querySelector(selector);
 
 		var elements = this._WORK.ROOT.querySelectorAll(selector);
-		if (elements.length < (index+1)) return null;
-		return elements[index];
+		if (elements.length < tarNo) return null;
+		return elements[tarNo-1];
 	}
 	fn.S = function(selector) {
 		if (!selector) return [this._WORK.ROOT];
@@ -738,11 +726,11 @@ let _d7Mode = 'dev';
 
 		return htmlContainer.firstChild;
 	}
-	fn.render = function(modelData, blockSelector) {
+	fn.render = function(modelData, selector) {
 		var currD7 = this;
-		var virtualBlock = virtualRender.call(currD7, modelData || {}, blockSelector);
+		var virtualBlock = virtualRender.call(currD7, modelData || {}, selector);
 
-		var tarBlock = currD7._WORK.ROOT.s(blockSelector);
+		var tarBlock = currD7._WORK.ROOT.s(selector);
 		if (!tarBlock) error('target block not exists.');
 		tarBlock.innerHTML = virtualBlock.innerHTML;
 		tarBlock.querySelectorAll("[compsrc]").forEach(function(compTag) {
@@ -830,9 +818,8 @@ let _d7Mode = 'dev';
 	/***
 	 * HTTP request
 	 * 	 default : GET JSON
-	 * 	 you can set paramMap to {_method:'POST', _responseType:'TEXT'}
 	/*/
-	fn.api = function(url, paramMap, options, onSuccess, onError) {
+	fn.api = function(url, params, options, onSuccess, onError) {
 		processing();
 		var currD7 = this;
 
@@ -842,7 +829,7 @@ let _d7Mode = 'dev';
 		if (!options.header) options.header = {};
 		options.method = options.method.toUpperCase();
 		options.responseType = options.responseType.toUpperCase();
-		if (options.method == "GET") url = this.util.stringifyUrl(url, paramMap);
+		if (options.method == "GET") url = this.util.stringifyUrl(url, params);
 
 		url = currD7.conf.apibase + url;
 		var xhr = new XMLHttpRequest();
@@ -881,18 +868,11 @@ let _d7Mode = 'dev';
 		}
 		xhr.setRequestHeader("Content-Type", "application/json; charset=utf-8");
 		//xhr.responseType = 'json';
-		xhr.send(options.method === "GET" ? null : JSON.stringify(paramMap));
+		xhr.send(options.method === "GET" ? null : JSON.stringify(params));
 	}
 
 	/*********************************************************************
 	 * UTIL
-     *   fn.util.encodeHtml(strHtml)
-     *   fn.util.stringifyUrl(url, queryMap)
-     *   fn.util.stringifyJSON(data)
-     *   fn.util.parseJSON(strJSON)
-     *   fn.util.format(value, strFormat, prefix, suffix)
-	 *   fn.util.emitEvent(selector, eventName, val)
-     *   fn.util.persist(key, value)
 	/*********************************************************************/
 	const parseQuery = function(strUrl) {
 		var params = {};
@@ -925,12 +905,27 @@ let _d7Mode = 'dev';
 	fn.util.parseJSON = function(strJSON) {
 		return JSON.parse(strJSON);
 	}
-	// fmt: ,|date|time|dateTime|other
-	fn.util.format = function(value, fmt, prefix, suffix) {
-		if (fmt === ',') {
+	// fmt: ,|date|datetime|time
+	fn.util.format = function(value, fmt, fmtEx) {
+		if (fmt === ',' || fmt === 'comma') {
 			if (typeof value === 'string') value = Number(value);
-			return prefix + value.toLocaleString() + suffix;
+			return (value.toLocaleString() + (fmtEx||''));
 		}
+		value = value.replaceAll(' ', '');
+		if (fmt === 'date') {
+			if (value.length > 7 ) return (value.substring(0,4) + fmtEx + value.substring(4,6) + fmtEx + value.substring(6,8));
+			error('wrong date value. ' + value);
+		}
+		if (fmt === 'datetime') {
+			if (value.length > 13) return (value.substring(0,4) + fmtEx + value.substring(4,6) + fmtEx + value.substring(6,8) + ' ' + value.substring(8,10) + ':' + value.substring(10,12) + ':' + value.substring(12,14));
+			error('wrong datetime value. ' + value);
+		}
+		if (fmt === 'time') {
+			if (value.length > 13) return (value.substring(8,10) + ':' + value.substring(10,12) + ':' + value.substring(12,14));
+			if (value.length >  5) return (value.substring(0,2) + ':' + value.substring(2,4) + ':' + value.substring(4,6));
+			error('wrong time value. ' + value);
+		}
+		error('wrong format.' + fmt);
 	}
 	fn.util.emitEvent = function(selector, eventName, val) {
 		var element = document.querySelector(selector);
@@ -1036,7 +1031,7 @@ let _d7Mode = 'dev';
 	 * var detailModal = _d7.modal("/detail.html", parameters, true|false);
 	 * detailModal.handleOk = function() {}
 	 */
-	fn.modal = function (url, params, autoClose) {
+	fn.loadmodal = function (url, params, autoClose) {
 		var modal = new Modal("modal", autoClose);
 		modal.form.setAttribute("compsrc", url);
 		modal.form.setAttribute("compseq", 999); // synch
@@ -1068,17 +1063,17 @@ let _d7Mode = 'dev';
 	fn.processing = processing;
 
 	/*********************************************************************
-	 * Element.s(selector, index)	=> select one
+	 * Element.s(selector, tarNo)	=> select one
 	 * Element.S(selector)			=> select all
 	 * Element.val(strAttr, val)	=> priority[strAttr > value > innerHTML]
 	 * Element.css()				=> {style}
 	 * Element.css(propOrMap)		=> val
-	 * Element.css({})				<= overwrite
+	 * Element.css({})				<= set all
 	 * Element.css(propOrMap, val|nullToDelete)
 	 * Element.clazz()				=> [classList]
-	 * Element.clazz(classOrList)	=> true|false
-	 * Element.clazz([])			<= overwrite
-	 * Element.clazz(classOrList, true|nullToDelete)
+	 * Element.clazz(classOrList)	=> judge is contains[true|false]
+	 * Element.clazz([])			<= add all
+	 * Element.clazz(classOrList, any|nullToDelete) => add
 	 * Element.attr(strProp)		=> val|null
 	 * Element.attr(strProp, val|nullToDelete)
 	/**********************************************************************/
