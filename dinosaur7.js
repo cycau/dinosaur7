@@ -69,7 +69,7 @@ let _d7Mode = 'dev';
 			this.childseq = 0;
 			this.children = {};
 			this._WORK = {showed:false};
-			this._CACHE = {funcRender:{}}; // cache compiled function
+			this._CACHE = {funcRender:{}};
 
 			this.assignBlock = function(tarBlock) {
 				tarBlock.setAttribute('_d7name', fullname);
@@ -86,7 +86,7 @@ let _d7Mode = 'dev';
 	/********************************************************************
 	 * CONSTANT
 	/********************************************************************/
-	const _LOGIC = {	// {% logic %} 				describe logic
+	const _LOGIC = {	// {% logic %}				describe logic
 		start: "{%",	// {% =varOrFunction %} 	describe output
 		close: "%}",	// {% =<varOrFunction %} 	encode and output
 	}
@@ -130,7 +130,7 @@ let _d7Mode = 'dev';
 		}
 		return htmlTag;
 	}
-    const bracketsPos = function(str, startPos, strStart, strEnd) {
+	const bracketsPos = function(str, startPos, strStart, strEnd) {
 		if (!str) return null;
 		if (!str) return null;
   
