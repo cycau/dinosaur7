@@ -1,6 +1,6 @@
 # dinosaur7
 作成中・・・
-汚いですが、testフォルダをご覧になったほうがはやいかも
+汚いですが、testフォルダをご覧になったほうがはやいかもです。
 
 ```
 @keyword React Vue Angular simple pure html client
