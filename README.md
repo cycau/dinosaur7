@@ -2,10 +2,10 @@
 ```
 作成中・・・
 sampleフォルダをご覧になったほうがはやいかもです。
-SPAモードでもレガシーモードでも動かせますよ。
+SPAモードでもレガシーモードでも動かせます。
 
 making...
-reference sample first.
+reference the sample first.
 ```
 ```
 @keyword React Vue Angular simple pure html client
@@ -22,9 +22,9 @@ The name [Dinosaur7] comes from that My daughter loves dinosaurs and is 7 years 
   [mainblock] To specify main page content. in SAP mode only mainblock will show as page.
   [solidblock] To tell Dinosaur7 that block don't need to load from remote.
 
-  {%  javascript logic %}
-  {%= print value to html %}
-  {%=<print value with encode %}
+  <!-- {%  javascript logic %} -->
+  <!-- {%= print value to html %} -->
+  <!-- {%=<print value with encode %} -->
 ```
 ##### Dinosaur7's all javascript method
 ```
