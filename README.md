@@ -11,7 +11,6 @@ Look at the sample folder first. It works in both SPA mode and legacy mode.
 ```
 ```
 @keyword React Vue Angular simple pure html client
-this framework help you to implement SPA with basic skill no longer need to hard work.
 The name [Dinosaur7] comes from that My daughter loves dinosaurs and is 7 years old.
 ```
 ##### Dinosaur7's all symbols you can specify in html tag
