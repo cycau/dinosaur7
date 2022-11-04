@@ -274,7 +274,7 @@ let _d7Mode = 'dev';
 				startPos = pos[0] + 3;
 			}
 			var valAttr = newArrayFlg[1] || '';
-			d7mTag.setAttribute('_d7m', isNaN(valAttr) ? (d7m + ',' + valAttr) : '');
+			d7mTag.setAttribute('_d7m', isNaN(valAttr) ? (d7m + ',' + valAttr) : d7m);
 		});
 		/***
 		 * replace logicKey in string mode.
@@ -1231,12 +1231,11 @@ let _d7Mode = 'dev';
 		}
 
 		_d7root.assignBlock(mainBlock);
-		if (_d7root._WORK.ROOT.hasAttribute("solidblock")) {
+		if (_d7root._WORK.ROOT.hasAttribute("solidblock") || _d7.conf.autoloadoff) {
 			typeof _d7root._WORK._funcOnload ? _d7root._WORK._funcOnload.call(_d7root) : _d7root.show(true);
 			return;
 		}
 		if (!_d7root.conf.pagebase) error('should specify [solidblock] in <mainblock> or define page\'s html root in SPA mode such as _d7.conf.pagebase = "/html/page". ');
-
 		_d7root.loadpage(window.location.pathname, parseQuery(window.location.href));
 	}
 
