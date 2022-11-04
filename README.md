@@ -1,11 +1,13 @@
 # dinosaur7
 ```
 作成中・・・
-sampleフォルダをご覧になったほうがはやいかもです。
+既存フロント技術の煩雑な構成＆コンセプトから解放されます。
+まずはsampleフォルダを眺めてください。
 SPAモードでもレガシーモードでも動かせます。
 
 making...
-reference the sample first.
+You are freed from complicated configurations and concepts of existing front technology.
+Look at the sample folder first. It works in both SPA mode and legacy mode.
 ```
 ```
 @keyword React Vue Angular simple pure html client
