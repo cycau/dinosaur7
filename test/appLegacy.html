@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>dinosaur7</title>
+    <link rel="stylesheet" href="/css/dinosaur7.min.css" type="text/css">
+    <script type="application/javascript" src="/js/dinosaur7.js"></script>
+    <script type="application/javascript" src="/js/testdata.js"></script>
+  </head>
+
+  <body style="display: none;">
+    <div compsrc="/com/header.html?key1=HeaderParam">wait header</div>
+    <mainblock solidblock>
+		<h1>SPA pageA01</h1>
+		<div>
+			<table>
+				<tr>
+					<td><button onclick="_d7.refreshTable();">REFRESH TABLE</button></td>
+					<td><button onclick="_d7.getData();">MODEL DATA</button></td>
+					<td><button onclick="_d7.openMsg();">OPEN MESSAGE</button></td>
+					<td><button onclick="_d7.openModal();">OPEN MODAL</button></td>
+				</tr>
+			</table>
+		</div>
+		<div>
+			<span _d7v="_m.key1"></span>
+			<table border="1">
+				<tr><th>colA</th><th>colB</th><th>colC</th><th>colD</th></tr>
+				<tr _d7="for(idx in _m.datalist) var row = _m.datalist[idx]">
+					<td _d7v="=m.datalist[idx].colA" _d7m=",,0"></td>
+					<td _d7v="=m.datalist[idx].colB" _d7m=",attr1" attr1="attrXXXXX"></td>
+					<td _d7v="=m.datalist[idx].colC" ></td>
+					<td _d7v="_m.datalist[idx].colD" ></td>
+				</tr>
+			</table>
+		</div>
+    </mainblock>
+    <footer compsrc="/com/footer.html">wait footer</footer>
+    <div id="msgbox" style="display: none;">
+      <div class="title">title</div>
+      <div class="contents" _d7v="_m.msg"></div>
+      <div class="button">
+        <button onclick="_d7.clickOk();">ok</button>
+        <button onclick="_d7.clickCancel();">cancel</button>
+      </div>
+    </div>
+  </body>
+
+<script type="application/javascript">
+	_d7.onload(function(){
+		this.render(initData);
+	})
+	_d7.openMsg = function() {
+		var msgbox = this.popup('#msgbox', {msg:'all right?'});
+		msgbox.clickOk = function() {
+			alert("ok clicked!");
+		}
+		msgbox.clickCancel = function() {
+			msgbox.close();
+		}
+	}
+	_d7.openModal = function() {
+		var modal = this.loadmodal('/com/modalA01.html', {msg:'this id modal parameter'}, true);
+		modal.callerMethod = function() {
+			alert("callerMethod clicked!");
+		}
+	}
+	_d7.refreshTable = function() {
+		this.render(refreshData);
+	}
+	_d7.getData = function() {
+		alert(this.util.stringifyJSON(this.m()));
+	}
+</script>
+</html>

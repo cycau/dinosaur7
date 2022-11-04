@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>dinosaur7</title>
+    <link rel="stylesheet" href="/css/dinosaur7.min.css" type="text/css">
+    <script type="application/javascript" src="/js/dinosaur7.js"></script>
+    <script type="application/javascript" src="/js/testdata.js"></script>
+  </head>
+  <body style="display: none;">
+    <div compsrc="/com/header.html?key1=HeaderParam">wait header</div>
+    <mainblock>
+    	
+    </mainblock>
+    <footer compsrc="/com/footer.html">wait footer</footer>
+  </body>
+  <script type="application/javascript">
+	_d7.conf.pagebase = "/page";
+
+	// if your html server side setting to redirect all request to this App page then you don't need this code. 
+	_d7.conf.autoloadoff = true;
+  	_d7.onload(function() {
+  		this.loadpage("/pageA01.html", this.params);
+  	});
+  </script>
+</html>
