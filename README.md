@@ -5,7 +5,7 @@
 SPAモードでもレガシーモード（商品ページ等）でも動かせますよ。
 
 making...
-refrence sample first.
+reference sample first.
 ```
 ```
 @keyword React Vue Angular simple pure html client
