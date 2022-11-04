@@ -58,8 +58,8 @@ The name [Dinosaur7] comes from that My daughter loves dinosaurs and is 7 years 
 ```
   Element.s(selector, empty|tarNo)
   Element.S(selector)
-  Element.val(strAttr|empty, val)			setter/getter, get value priority[strAttr > value > innerHTML]
-  Element.css(propOrMap|empty, val|null)		setter/getter, null value to remove
+  Element.val(strAttr|empty, val|empty)		setter/getter, get value priority[strAttr > value > innerHTML]
+  Element.css(propOrMap|empty, val|null)	setter/getter, null value to remove
   Element.clazz(classOrList|empty, val|null)	setter/getter, null value to remove
   Element.attr(strProp|empty, val|null)		setter/getter, null value to remove
 ```
