@@ -1,21 +1,16 @@
 <div>
   <h1>HEADER</h1>
-  <span _d7v="_m.val1">header span</span>
-  <button onclick="_d7.eventHeader();">HEADER Btn</button>
+  <div _d7v="_m.key1">header span</div>
+  <button onclick="_d7.clickBtn();">HEADER button</button>
 </div>
-<div compsrc="/com/headerParts.html">wait header parts</div>
+<div compsrc="/com/headerParts.html?key1=PartsParam">wait header parts</div>
 
-<script type="application/javascript" eventbind>
-  console.info("header start");
-
-  _d7.eventHeader = function() {
-    console.info("header.eventHeader ok.");
+<script type="application/javascript">
+  _d7.clickBtn = function() {
+    alert("header button clicked.");
   };
 
   _d7.onload(function() {
-    console.info("header onload ok." + this.params.val1);
     this.render(this.params);
   })
-
-  console.info("header end");
 </script>

@@ -1,0 +1,28 @@
+<h1>modalA01</h1>
+<div>
+	<table>
+		<tr>
+			<td><button onclick="_d7.callerMethod();">CALLER METHOD</button></td>
+			<td><button onclick="_d7.closeModal();">CLOSE</button></td>
+		</tr>
+	</table>
+</div>
+<div>
+	<table border="1">
+		<tr><th>colA</th><th>colB</th><th>colC</th></tr>
+		<tr _d7="for(idx in _m.datalist) var row = _m.datalist[idx]">
+			<td _d7v="=m.datalist[idx].colA" _d7m=",,0"></td>
+			<td _d7v="=m.datalist[idx].colB" _d7m=",attr1" attr1="attVal"></td>
+			<td _d7v="=m.datalist[idx].colC" ></td>
+		</tr>
+	</table>
+</div>
+<script type="application/javascript">
+	_d7.onload(function(){
+		this.render(modalData);
+	})
+	_d7.closeModal = function() {
+		alert("modal close clicked!");
+		this.close();
+	}
+</script>
