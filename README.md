@@ -1,8 +1,11 @@
 # dinosaur7
 ```
 作成中・・・
-汚いですが、testフォルダをご覧になったほうがはやいかもです。
+汚いですが、sampleフォルダをご覧になったほうがはやいかもです。
 SPAモードでもレガシーモード（商品ページ等）でも動かせますよ。
+
+making...
+refrence sample first.
 ```
 ```
 @keyword React Vue Angular simple pure html client
