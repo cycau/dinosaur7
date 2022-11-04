@@ -17,9 +17,9 @@ let _d7Mode = 'dev';
  *   [mainblock] To specify main page content. in SAP mode only mainblock will show as page.
  *   [solidblock] To tell Dinosaur7 that block don't need to load from remote.
  *
- *   {%  javascript logic %}
- *   {%= print value to html %}
- *   {%=<print value with encode %}
+ *   <!-- {%  javascript logic %} -->
+ *   <!-- {%= print value to html %} -->
+ *   <!-- {%=<print value with encode %} -->
  *
  * Dinosaur7's all javascript method
  *   fn.onload(funcOnload) 					run funcOnload on load event.
