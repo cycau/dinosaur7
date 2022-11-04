@@ -31,7 +31,7 @@ The name [Dinosaur7] comes from that My daughter loves dinosaurs and is 7 years 
   fn.onload(funcOnload) 					run funcOnload on load event.
   fn.s(selector, empty|tarNo)			select one element.
   fn.S(selector) 						select all element.
-  fn.m(empty|selector) 					collect target block's data as Map.
+  fn.m(empty|selector) 					collect target block's data to a Map.
   fn.render(ModelData, empty|selector)	render data to target block.
   fn.renderTo(ModelData, srcSelector, empty|srcChildSlector, tarSelector, empty|tarChildSlector)
   fn.remove(selector, empty|childIndex)	remove one element.
@@ -50,7 +50,7 @@ The name [Dinosaur7] comes from that My daughter loves dinosaurs and is 7 years 
   fn.util.stringifyUrl(url, params)
   fn.util.stringifyJSON(data)
   fn.util.parseJSON(strJSON)
-  fn.util.format(value, fmt, fmtEx)			,|comma|date|datetime|time
+  fn.util.format(value, fmt, fmtEx)			,|comma|date|datetime|time|...
   fn.util.emitEvent(selector, eventName, val)
   fn.util.persistVal(key, empty|value)		save to localStorage or cookie.
 ```
@@ -58,7 +58,7 @@ The name [Dinosaur7] comes from that My daughter loves dinosaurs and is 7 years 
 ```
   Element.s(selector, empty|tarNo)
   Element.S(selector)
-  Element.val(strAttr, val)					setter/getter
+  Element.val(strAttr|empty, val)					setter/getter, get value priority[strAttr > value > innerHTML]
   Element.css(propOrMap|empty, val|null)		setter/getter, null value to remove
   Element.clazz(classOrList|empty, val|null)	setter/getter, null value to remove
   Element.attr(strProp|empty, val|null)		setter/getter, null value to remove
