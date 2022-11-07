@@ -165,7 +165,7 @@ _d7.m() => {key1:[{key2:'value1',key3:'value2'},{key2:'valueA',key3:'valueB'}]}
 ```
 <td _d7m="key1[].key2,0">value1</td>  
 ```
-正しくは以下の通り、attribute位置を開けて置いた方が良い。  
+正しくは以下の通り、attribute位置を空けて置いた方がベスト。  
 ```
 <td _d7m="key1[].key2,,0">value1</td>  
 ```
