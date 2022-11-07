@@ -1,7 +1,7 @@
 # Dinosaur7
 
 @keyword React Vue Angular simple pure html client  
-You are freed from complicated configurations and concepts of existing front technology.  
+You will be freed from complicated configurations and concepts of current front-end technology.  
 Look at the sample folder first. It works in both SPA mode and legacy mode.  
 
 既存フロントエンド技術の煩雑な構成＆コンセプトから解放されるでしょう。  
