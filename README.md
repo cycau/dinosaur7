@@ -1,10 +1,10 @@
-# dinosaur7
+# Dinosaur7
 
 @keyword React Vue Angular simple pure html client  
 You are freed from complicated configurations and concepts of existing front technology.  
 Look at the sample folder first. It works in both SPA mode and legacy mode.  
 
-既存フロント技術の煩雑な構成＆コンセプトから解放されます。  
+既存フロントエンド技術の煩雑な構成＆コンセプトから解放されます。  
 まずはsampleフォルダを眺めてください。  
 SPAモードでもレガシーモードでも動かせます。  
 
@@ -35,7 +35,7 @@ fn.render(ModelData, empty|selector)		render data to target block.
 fn.renderTo(ModelData, srcSelector, empty|srcChildSlector, tarSelector, empty|tarChildSlector)
 fn.remove(selector, empty|childIndex)		remove one element.
 fn.show(empty|false)
-fn.loadpage(url, empty|params)			load a component as page to mainblock.
+fn.loadpage(url, empty|params)			load a component as page to <mainblock> tag.
 fn.api(url, params, empty|options, empty|onSuccess, empty|onError)
 fn.popup(selector, params, autoClose)		popup current html block.
 fn.loadmodal(url, params, autoClose)		load a component and show in modal mode.
@@ -47,9 +47,9 @@ fn.util.encodeHtml(strHtml)
 fn.util.stringifyUrl(url, params)
 fn.util.stringifyJSON(data)
 fn.util.parseJSON(strJSON)
-fn.util.format(value, fmt, fmtEx)		,|comma|date|datetime|time|...
 fn.util.emitEvent(selector, eventName, val)
 fn.util.persistVal(key, empty|value)		save to localStorage or cookie.
+fn.util.format(value, fmt, fmtEx)		,|comma|date|datetime|time|...
 ```
 ### Expand native Element's method
 ```
@@ -114,13 +114,14 @@ HTML
 ```
 
 ##### 2.9 hint
+```
 {% %}内はJavascriptとして解釈されるが、HTML TAG間に記述する場合<!-- {% %} -->のように囲む必要（安全）がある。
+```
 
 ## モデル編
 
 ### 1.[_d7v属性]表示用
-_d7.render({key1:'value1'})を実行すると以下の通り表示される。  
-[_m]は入力データを示す予約語である。  
+_d7.render({key1:'value1'})を実行すると以下の通り表示される。[_m]は入力データを示す予約語である。  
 ※表示優先順位[attribute > value > innerHTML]
 ```
 <span _d7v="_m.key1,attributeA01">value1</span>       => <span _d7v="_m.key1" attributeA01="value1"></span>
@@ -142,8 +143,8 @@ _d7.render({key1:'value1'})を実行すると以下の通り表示される。
 ```
 <span _d7m="key1[]">value1</span>
 <span _d7m="key1[]">value2</span>
-_d7.m() => {key1:['value1','value2']}
 ```
+_d7.m() => {key1:['value1','value2']}
 
 ##### 2.2 複合配列の場合
 ```
@@ -157,17 +158,21 @@ _d7.m() => {key1:['value1','value2']}
     <td _d7m="key1[].key3">valueB</td>
   <tr>
 <table>
-_d7.m() => {key1:[{key2:'value1',key3:'value2'},{key2:'valueA',key3:'valueB'}]}
 ```
+_d7.m() => {key1:[{key2:'value1',key3:'value2'},{key2:'valueA',key3:'valueB'}]}  
 ※[+]で新しい配列であることを示す。  
 以下も同じ効果、[+]の代わりに番号でN番目の配列は新しい配列のスタートということを示す。  
+```
 <td _d7m="key1[].key2,0">value1</td>  
+```
 正確は以下の通り、attribute位置を開けて置くべきである。  
+```
 <td _d7m="key1[].key2,,0">value1</td>  
+```
 
 
-### 3.入出力同時定義
-_mの代わりに=mを使うことで、双方向を示す。
+### 3.双方向定義
+[_m]の代わりに[=m]を使うことで、入出力同時定義が可能である。
 ```
 <span _d7v="=m.key1"></span>                        = <span _d7v="_m.key1" _d7m="key1"></span>
 <span _d7v="=m.key1,attributeA01"></span>           = <span _d7v="_m.key1,attributeA01" _d7m="key1,attributeA01"></span>
@@ -196,6 +201,7 @@ options = {
 ## ポップアップウィンドウ編
 d7.popup(selector, params, autoClose) カレントHTML内の一部をPOPUP効果で表示。
 ``` 
+in HTML DOCUMENT:
 <div id="msgbox" style="display: none;">
   <div class="title">title</div>
   <div class="contents" _d7v="_m.msg"></div>
@@ -204,26 +210,27 @@ d7.popup(selector, params, autoClose) カレントHTML内の一部をPOPUP効果
     <button onclick="_d7.clickCancel();">cancel</button>
   </div>
 </div>
+
+
+you can run:
 var msgbox = this.popup('#msgbox', {msg:'all right?'});
 msgbox.clickOk = function() {
-	alert("ok clicked!");
+  alert("ok clicked!");
 }
 msgbox.clickCancel = function() {
-	msgbox.close();
+  msgbox.close();
 }
 ```
 
 
 ## モダルウィンドウ編
-##### 1._d7.loadmodal(url, params, autoClose) リモートコンポネントをModal効果で表示。
+_d7.loadmodal(url, params, autoClose) リモートコンポネントをModal効果で表示。
 ```
 var modal = _d7.loadmodal('/com/modalA01.html', {key:'this id modal parameter'}, true);
 ```
-
-#####  9.hint
-modal.someMethod = function() {}を定義し、
-モダルのイベントから呼び出させることによってモダルから親への値渡し等が可能である。
+modal.someMethod = function() {}を定義し、  
+モダルのイベントから呼び出させることによってモダルから親への値渡し等が可能である。  
 
 
 ## その他
-Util系、その他詳細は概要のまんま～
+Util系、その他詳細は概要のまんま～  
