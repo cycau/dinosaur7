@@ -4,7 +4,7 @@
 You are freed from complicated configurations and concepts of existing front technology.  
 Look at the sample folder first. It works in both SPA mode and legacy mode.  
 
-既存フロントエンド技術の煩雑な構成＆コンセプトから解放されます。  
+既存フロントエンド技術の煩雑な構成＆コンセプトから解放されるでしょう。  
 まずはsampleフォルダを眺めてください。  
 SPAモードでもレガシーモードでも動かせます。  
 
