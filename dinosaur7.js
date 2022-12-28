@@ -725,7 +725,7 @@ let _d7Mode = 'dev';
 			var d7v = d7vTag.getAttribute('_d7v').split('|');
 			if (d7v.length > 1) {
 				var formatParam = d7v[1].substring(d7v[1].indexOf('|')+1).split(',');
-				val = util.format(val, formatParam[0], formatParam[1]);
+				val = util.format(val, formatParam[0].trim(), formatParam.length>1 ? formatParam[1].trim() : null);
 			}
 
 			var d7v = d7v[0].split(',');
