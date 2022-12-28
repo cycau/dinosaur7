@@ -23,7 +23,7 @@ The name [Dinosaur7] comes from that My daughter loves dinosaurs and is 7 years 
 [solidblock]		To tell Dinosaur7 that block don't need to load from remote.
 <!-- {%  javascript logic %} -->
 <!-- {%= print value to html %} -->
-<!-- {%=<print value with encode %} -->
+<!-- {%# print value with encode %} -->
 ```
 ### Dinosaur7's all javascript method
 ```
