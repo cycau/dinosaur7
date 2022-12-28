@@ -49,7 +49,7 @@ fn.util.stringifyJSON(data)
 fn.util.parseJSON(strJSON)
 fn.util.emitEvent(selector, eventName, val)
 fn.util.persistVal(key, empty|value)		save to localStorage or cookie.
-fn.util.format(value, fmt, fmtEx)		comma|date|datetime|time|...
+fn.util.format(value, fmt, fmtEx)		comma|date|datetime|time|...Add on yourself as needed
 ```
 ### Expand native Element's method
 ```
