@@ -19,7 +19,7 @@ let _d7Mode = 'dev';
  *
  *   <!-- {%  javascript logic %} -->
  *   <!-- {%= print value to html %} -->
- *   <!-- {%=<print value with encode %} -->
+ *   <!-- {%# print value with encode %} -->
  *
  * Dinosaur7's all javascript method
  *   fn.onload(funcOnload) 					run funcOnload on load event.
@@ -356,9 +356,9 @@ let _d7Mode = 'dev';
 		strHtml = strHtml.replace(/[\r\n]/g, "").replace(/'/g, "\\'"); // escape all ' first and recover in below.
 		var tpl = strHtml.replace(new RegExp(regstr, "gm"), function (m, cmtoutStart, start, expr, close, cmtoutClose) {
 				expr = expr.replace(/\\'/gm, "'").trim();
-				if (expr.startsWith("=<")) {
-					expr = expr.substring(2);
-					return "'.replaceAll('_d7.', _d7name + '.') + this.util.encodeHtml(" + expr + ") + '";
+				if (expr.startsWith("#")) {
+					expr = expr.substring(1);
+					return "'.replaceAll('_d7.', _d7name + '.') + _d7.util.encodeHtml(" + expr + ") + '";
 				}
 				if (expr.startsWith("=")) {
 					expr = expr.substring(1);
