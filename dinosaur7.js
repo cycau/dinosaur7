@@ -242,7 +242,7 @@ let _d7Mode = 'dev';
 		 */
 		 workingTag.querySelectorAll("[_d7v]").forEach(function(d7vTag) {
 			var d7v = d7vTag.getAttribute('_d7v').split('|')[0].split(',')[0];
-			d7vTag.setAttribute('_d7vi', `${_LOGIC.start}_c.push(${d7v.replaceAll("=m.", "_m.")})${_LOGIC.close}${_LOGIC.start}=_c.length-1${_LOGIC.close}`);
+			d7vTag.setAttribute('_d7vi', `${_LOGIC.start}_c.push(${d7v.replaceAll("=m.", "_m.")})${_LOGIC.close}${_LOGIC.start}=_c.length-0-1${_LOGIC.close}`);
 			if (!d7v.startsWith("=m.")) return;
 
 			var d7m = (d7vTag.getAttribute('_d7m') || "").split(',');
@@ -362,7 +362,7 @@ let _d7Mode = 'dev';
 				}
 				if (expr.startsWith("=")) {
 					expr = expr.substring(1);
-					if (expr === "_c.length-1") return "' + (" + expr + ") + '";
+					if (expr === "_c.length-0-1") return "' + (_c.length-1) + '";
 					return "'.replaceAll('_d7.', _d7name + '.') + (" + expr + ") + '";
 				}
 				return "'.replaceAll('_d7.', _d7name + '.');" + expr + "; out+='";
