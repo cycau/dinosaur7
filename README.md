@@ -49,16 +49,20 @@ fn.util.stringifyJSON(data)
 fn.util.parseJSON(strJSON)
 fn.util.emitEvent(selector, eventName, val)
 fn.util.persistVal(key, empty|value)		save to localStorage or cookie.
-fn.util.format(value, fmt, fmtEx)		,|comma|date|datetime|time|...
+fn.util.format(value, fmt, fmtEx)		comma|date|datetime|time|...
 ```
 ### Expand native Element's method
 ```
 Element.s(selector, empty|tarNo)
 Element.S(selector)
-Element.val(strAttr|empty, val|empty)		setter/getter, get value priority[strAttr > value > innerHTML]
-Element.css(propOrMap|empty, val|null)		setter/getter, null value to remove
-Element.clazz(classOrList|empty, val|null)	setter/getter, null value to remove
-Element.attr(strProp|empty, val|null)		setter/getter, null value to remove
+Element.getVal(attr)		=> priority[attr > value > innerHTML]
+Element.setVal(val, attr)	=> priority[attr > value > innerHTML]
+Element.getStyle(prop)
+Element.setStyle(propOrMap, nullToDelete)
+Element.getClass(clazz)
+Element.setClass(clazzOrList, nullToDelete)
+Element.getAttr(prop)
+Element.setAttr(prop, nullToDelete)
 ```
 
 
@@ -121,12 +125,13 @@ HTML
 ## モデル編
 
 ### 1.[_d7v属性]表示用
-_d7.render({key1:'value1'})を実行すると以下の通り表示される。[_m]は入力データを示す予約語である。  
+_d7.render({key1:'1980'})を実行すると以下の通り表示される。[_m]は入力データを示す予約語である。  
 ※表示優先順位[attribute > value > innerHTML]
 ```
-<span _d7v="_m.key1,attributeA01">value1</span>       => <span _d7v="_m.key1" attributeA01="value1"></span>
-<span _d7v="_m.key1" value="initValue"></span>        => <span _d7v="_m.key1" value="value1"></span>
-<span _d7v="_m.key1">initValue</span>                 => <span _d7v="_m.key1">value1</span>
+<span _d7v="_m.key1,attributeA01">value1</span>       => <span _d7v="_m.key1" attributeA01="1980"></span>
+<span _d7v="_m.key1" value="initValue"></span>        => <span _d7v="_m.key1" value="1980"></span>
+<span _d7v="_m.key1">initValue</span>                 => <span _d7v="_m.key1">1980</span>
+<span _d7v="_m.key1,attributeA01|comman">value1</span>=> <span _d7v="_m.key1" attributeA01="1,980"></span>
 ```
 
 ### 2.[_d7m属性]取得用。
