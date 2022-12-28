@@ -19,7 +19,7 @@ The name [Dinosaur7] comes from that My daughter loves dinosaurs and is 7 years 
 [_d7m] 			specify key to collect html value to a Map.
 [compsrc] 		specify external component resource that includes html and script.
 [compseq] 		priority for loading component, specify this will load in synchronize mode.
-[mainblock]		To specify main page content. in SAP mode only mainblock will show as page.
+[mainblock]		To specify main page area. in SAP mode only mainblock will show as page.
 [solidblock]		To tell Dinosaur7 that block don't need to load from remote.
 <!-- {%  javascript logic %} -->
 <!-- {%= print value to html %} -->
