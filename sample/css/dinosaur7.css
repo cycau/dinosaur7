@@ -100,7 +100,7 @@
 	bottom: 0;
 	z-index: 9988;
 	transition-duration: 0.3s;
-	background-color: rgba(0, 0, 0, .01);
+	background-color: rgba(0, 0, 0, .3);
 }
 ._d7_processing_form {
 	position: fixed;
@@ -112,7 +112,7 @@
 	box-sizing: border-box;
 	padding: 5px;
 	border-radius: 5px;
-	background-color: #fff;
+	background-color: rgba(0, 0, 0, .0);
 	transform: translate(-50%, -50%);
 }
 ._d7_processing_overlay_closing {
