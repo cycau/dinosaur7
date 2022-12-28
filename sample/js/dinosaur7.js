@@ -17,9 +17,9 @@ let _d7Mode = 'dev';
  *   [mainblock] To specify main page content. in SAP mode only mainblock will show as page.
  *   [solidblock] To tell Dinosaur7 that block don't need to load from remote.
  *
- *   {%  javascript logic %}
- *   {%= print value to html %}
- *   {%=<print value with encode %}
+ *   <!-- {%  javascript logic %} -->
+ *   <!-- {%= print value to html %} -->
+ *   <!-- {%=<print value with encode %} -->
  *
  * Dinosaur7's all javascript method
  *   fn.onload(funcOnload) 					run funcOnload on load event.
@@ -43,17 +43,21 @@ let _d7Mode = 'dev';
  *   fn.util.stringifyUrl(url, params)
  *   fn.util.stringifyJSON(data)
  *   fn.util.parseJSON(strJSON)
- *   fn.util.format(value, fmt, fmtEx)			,|comma|date|datetime|time
+ *   fn.util.format(value, fmt, fmtEx)			comma|date|datetime|time
  *   fn.util.emitEvent(selector, eventName, val)
  *   fn.util.persistVal(key, empty|value)		save to localStorage or cookie.
  * 
  * Expand native Element's method
- *   Element.s(selector, empty|tarNo)
- *   Element.S(selector)
- *   Element.val(strAttr, val)					setter/getter
- *   Element.css(propOrMap|empty, val|null)		setter/getter, null value to remove
- *   Element.clazz(classOrList|empty, val|null)	setter/getter, null value to remove
- *   Element.attr(strProp|empty, val|null)		setter/getter, null value to remove
+ *   Element.s(selector, tarNo)	=> select one
+ *   Element.S(selector)		=> select all
+ *   Element.getVal(attr)		=> priority[attr > value > innerHTML]
+ *   Element.setVal(val, attr)	=> priority[attr > value > innerHTML]
+ *   Element.getStyle(prop)
+ *   Element.setStyle(propOrMap, nullToDelete)
+ *   Element.getClass(clazz)
+ *   Element.setClass(clazzOrList, nullToDelete)
+ *   Element.getAttr(prop)
+ *   Element.setAttr(prop, nullToDelete)
 /*/
 (function (global) {
 	const error = function(msg) {
@@ -131,7 +135,6 @@ let _d7Mode = 'dev';
 		return htmlTag;
 	}
 	const bracketsPos = function(str, startPos, strStart, strEnd) {
-		if (!str) return null;
 		if (!str) return null;
   
 		var deeps = 0;
@@ -230,15 +233,15 @@ let _d7Mode = 'dev';
 			expandD7ModelExpr(d7vTag, d7v);
 		});
 		/***
-		 * <span _d7v="=m.key1.key[idx].val,attr"></span>
+		 * <span _d7v="=m.key1.key[idx].val,attr|formatParameter"></span>
 		 * to
-		 * <span _d7v="=m.key1.key[idx].val,attr"
+		 * <span _d7v="=m.key1.key[idx].val,attr|formatParameter"
 		 *       _d7vi="{%_c.push(_m.key1.key[idx].val)%}{%=_c.size()-1%}"
 		 *       _d7m="key1.key[].val">
 		 * </span>
 		 */
 		 workingTag.querySelectorAll("[_d7v]").forEach(function(d7vTag) {
-			var d7v = d7vTag.getAttribute('_d7v').split(',')[0];
+			var d7v = d7vTag.getAttribute('_d7v').split('|')[0].split(',')[0];
 			d7vTag.setAttribute('_d7vi', `${_LOGIC.start}_c.push(${d7v.replaceAll("=m.", "_m.")})${_LOGIC.close}${_LOGIC.start}=_c.length-1${_LOGIC.close}`);
 			if (!d7v.startsWith("=m.")) return;
 
@@ -256,7 +259,12 @@ let _d7Mode = 'dev';
 			d7m[0] = d7v;
 			d7vTag.setAttribute('_d7m', d7m.join(','));
 		});
-		workingTag.querySelectorAll("[_d7m]").forEach(function(d7mTag) {
+		/***
+		 * <span _d7m="=m.key1.key[].val,attr,0"></span>
+		 * to
+		 * <span _d7m="=m.key1.key[+].val,attr"></span>
+		 */
+		 workingTag.querySelectorAll("[_d7m]").forEach(function(d7mTag) {
 			var d7m = d7mTag.getAttribute('_d7m');
 			if (d7m.indexOf(',') < 0) return;
 
@@ -402,7 +410,7 @@ let _d7Mode = 'dev';
 		if (_d7name) deleteComp(_d7name);
 
 		var compUrl = compTag.getAttribute('compsrc');
-		if (!params) params = parseQuery(compUrl);
+		params = Object.assign(parseQuery(compUrl), params);
 		var _d7Comp = createComp(this, params);
 
 		if (_CACHE_COMP[compUrl]) {
@@ -656,7 +664,7 @@ let _d7Mode = 'dev';
 			var accessKey = d7m.split(',');
 			var keys = accessKey[0].trim().replaceAll("[", ".[").replaceAll("..", ".").split(".");
 			var dc = dataContainer(modelData, keys, arrayFlg);
-			dc[keys[keys.length-1]] = tarBlock.val(accessKey[1] || '');
+			dc[keys[keys.length-1]] = tarBlock.getVal(accessKey[1] || '');
 		}
 
 		// must be sequentially!
@@ -713,8 +721,15 @@ let _d7Mode = 'dev';
 		// embed value
 		htmlContainer.querySelectorAll("[_d7v]").forEach(function(d7vTag) {
 			var idx = d7vTag.getAttribute('_d7vi');
-			var d7v = d7vTag.getAttribute('_d7v').split(',');
-			d7vTag.val(d7v[1] || '', valContainer[idx]);
+			var val = valContainer[idx];
+			var d7v = d7vTag.getAttribute('_d7v').split('|');
+			if (d7v.length > 1) {
+				var formatParam = d7v[1].substring(d7v[1].indexOf('|')+1).split(',');
+				val = util.format(val, formatParam[0].trim(), formatParam.length>1 ? formatParam[1].trim() : null);
+			}
+
+			var d7v = d7v[0].split(',');
+			d7vTag.setVal(val, d7v[1]);
 			d7vTag.removeAttribute('_d7v');
 			d7vTag.removeAttribute('_d7vi');
 		})
@@ -883,15 +898,15 @@ let _d7Mode = 'dev';
 		});
 		return params;
 	}
-	fn.util = {};
-	fn.util.encodeHtml = function(strHtml) {
+	const util = {};
+	util.encodeHtml = function(strHtml) {
 		strHtml = strHtml || '';
 		strHtml = strHtml.replace(/./g, function (c) {
 			return _HTMLENCODE[c] || c; 
 		});
 		return strHtml
 	};
-	fn.util.stringifyUrl = function(url, queryMap) {
+	util.stringifyUrl = function(url, queryMap) {
 		if (!queryMap) return url;
 		if (!Object.keys(queryMap).length) return url;
 
@@ -899,17 +914,20 @@ let _d7Mode = 'dev';
 			return key + "=" + encodeURIComponent(queryMap[key]);
 		}).join("&");
 	}
-	fn.util.stringifyJSON = function(data) {
+	util.stringifyJSON = function(data) {
 		return JSON.stringify(data);
 	}
-	fn.util.parseJSON = function(strJSON) {
+	util.parseJSON = function(strJSON) {
 		return JSON.parse(strJSON);
 	}
-	// fmt: ,|date|datetime|time
-	fn.util.format = function(value, fmt, fmtEx) {
-		if (fmt === ',' || fmt === 'comma') {
+	// fmt: comma|date|datetime|time|elapsed
+	util.format = function(value, fmt, fmtEx) {
+		if (fmt === 'comma') {
 			if (typeof value === 'string') value = Number(value);
 			return (value.toLocaleString() + (fmtEx||''));
+		}
+		if (fmt === 'elapsed') {
+
 		}
 		value = value.replaceAll(' ', '');
 		if (fmt === 'date') {
@@ -927,13 +945,13 @@ let _d7Mode = 'dev';
 		}
 		error('wrong format.' + fmt);
 	}
-	fn.util.emitEvent = function(selector, eventName, val) {
+	util.emitEvent = function(selector, eventName, val) {
 		var element = document.querySelector(selector);
 		if (!element) error("target not found in emitEvent. " + selector);
 		if (eventName.startsWith("on")) eventName = eventName.substring(2);
 		element.dispatchEvent(new Event(eventName, val));
 	}
-	fn.util.persistVal = function(key, val) {
+	util.persistVal = function(key, val) {
 		try {
 			localStorage.setItem('dummytest', '1');
 			if (localStorage.getItem('dummytest') === '1') {
@@ -958,6 +976,7 @@ let _d7Mode = 'dev';
 		else expires.setTime(expires.getTime() - 1000);
 		document.cookie = `${key}=${encodeURIComponent(val)}; expires=${expires.toGMTString()}`;
 	}
+	fn.util = util;
 	/*********************************************************************
 	 * popup(msgbox) | modal | processing
 	/*********************************************************************/
@@ -1065,17 +1084,14 @@ let _d7Mode = 'dev';
 	/*********************************************************************
 	 * Element.s(selector, tarNo)	=> select one
 	 * Element.S(selector)			=> select all
-	 * Element.val(strAttr, val)	=> priority[strAttr > value > innerHTML]
-	 * Element.css()				=> {style}
-	 * Element.css(propOrMap)		=> val
-	 * Element.css({})				<= set all
-	 * Element.css(propOrMap, val|nullToDelete)
-	 * Element.clazz()				=> [classList]
-	 * Element.clazz(classOrList)	=> judge is contains[true|false]
-	 * Element.clazz([])			<= add all
-	 * Element.clazz(classOrList, any|nullToDelete) => add
-	 * Element.attr(strProp)		=> val|null
-	 * Element.attr(strProp, val|nullToDelete)
+	 * Element.getVal(attr)			=> priority[attr > value > innerHTML]
+	 * Element.setVal(val, attr)	=> priority[attr > value > innerHTML]
+	 * Element.getStyle(prop)
+	 * Element.setStyle(propOrMap, nullToDelete)
+	 * Element.getClass(clazz)
+	 * Element.setClass(clazzOrList, nullToDelete)
+	 * Element.getAttr(prop)
+	 * Element.setAttr(prop, nullToDelete)
 	/**********************************************************************/
 	// selectOne
 	Element.prototype.s = function(selector, tarNo) {
@@ -1092,17 +1108,15 @@ let _d7Mode = 'dev';
 		return this.querySelectorAll(selector);
 	}
 	// value priority[strAttr > value > innerHTML]
-	Element.prototype.val = function(attr, val) {
-		//getter
-		if (typeof val === 'undefined') {
-			if (attr) {
-				if (attr === 'text' || attr === 'innerHTML') return this.innerHTML;
-				return this.getAttribute(attr);
-			}
-			if (typeof this.value !== 'undefined') return this.value;
-			return this.innerHTML;
+	Element.prototype.getVal = function(attr) {
+		if (attr) {
+			if (attr === 'text' || attr === 'innerHTML') return this.innerHTML;
+			return this.getAttribute(attr);
 		}
-		// setter
+		if (typeof this.value !== 'undefined') return this.value;
+		return this.innerHTML;
+	}
+	Element.prototype.setVal = function(val, attr) {
 		if (attr) {
 			if (attr == 'text' || attr === 'innerHTML') {this.innerHTML = val; return this;}
 			this.setAttribute(attr, val);
@@ -1113,67 +1127,64 @@ let _d7Mode = 'dev';
 		return this;
 	}
 	// style
-	Element.prototype.css = function(propOrMap, val) {
-		if (typeof propOrMap === 'undefined') {
-			var css = {};
-			(this.style.cssText || '').split(';').forEach(function(str){
-				var cssunit = str.split(':');
-				if (cssunit.length < 2) return;
-				css[cssunit[0].trim()] = cssunit[1].trim();
-			})
-			return css;
-		}
-		if (typeof val === 'undefined') {
-			if (typeof propOrMap === 'string') return this.style[propOrMap];
-			for (var key in propOrMap) {
-				this.style[key] = propOrMap[key];
-			}
+	Element.prototype.getStyle = function(prop) {
+		if (prop) return this.style[prop];
+
+		var css = {};
+		(this.style.cssText || '').split(';').forEach(function(str){
+			var cssunit = str.split(':');
+			if (cssunit.length < 2) return;
+			css[cssunit[0].trim()] = cssunit[1].trim();
+		})
+		return css;
+	};
+	Element.prototype.setStyle = function(propOrMap, nullToDelete) {
+		if (typeof propOrMap === 'string') {
+			this.style[propOrMap] = nullToDelete;
 			return this;
 		}
-		if (typeof propOrMap !== 'string') error('[propOrMap] must be a string when set or remove.');
-		if (val === null) {
-			this.style[propOrMap] = null;
-			return this;
+		for (var key in propOrMap) {
+			this.style[key] = propOrMap[key];
 		}
-		this.style[propOrMap] = val;
 		return this;
 	};
 	// class
-	Element.prototype.clazz = function(classOrList, val) {
-		if (typeof classOrList === 'undefined') {
-			var clazz = [];
-			for (var idx=0; idx < this.classList.length; idx++) {
-				clazz.push(this.classList[idx]);
-			}
-			return clazz;
+	Element.prototype.getClass = function(clazz) {
+		if (clazz) {
+			if (this.classList.contains(clazz)) return clazz;
+			return null;
 		}
-		if (typeof val === 'undefined') {
-			if (typeof classOrList === 'string') return this.classList.contains(classOrList);
-			for (var idx=0; idx < classOrList.length; idx++) {
-				this.classList.add(classOrList[idx]);
+		var clazz = [];
+		for (var idx=0; idx < this.classList.length; idx++) {
+			clazz.push(this.classList[idx]);
+		}
+		return clazz;
+	}
+	Element.prototype.setClass = function(clazzOrList, nullToDelete) {
+		if (typeof clazzOrList === 'string') {
+			if (nullToDelete === null) {
+				this.classList.remove(clazzOrList);
+				return this;
 			}
+			this.classList.add(clazzOrList);
 			return this;
 		}
-		if (typeof classOrList !== 'string') error('[classOrList] must be a string when add or remove.');
-		if (val === null) {
-			this.classList.remove(classOrList);
-			return this;
+		for (var idx=0; idx < clazzOrList.length; idx++) {
+			this.classList.add(clazzOrList[idx]);
 		}
-		this.classList.add(classOrList);
 		return this;
 	}
 	// attribute
-	Element.prototype.attr = function(prop, val) {
-		if (!prop) error('[prop] can not be empty.');
-		if (typeof val === 'undefined') {
-			if (!this.hasAttribute(prop)) return null;
-			return this.getAttribute(prop) || '';
-		}
-		if (val === null) {
+	Element.prototype.getAttr = function(prop) {
+		if (!this.hasAttribute(prop)) return null;
+		return this.getAttribute(prop) || '';
+	}
+	Element.prototype.setAttr = function(prop, nullToDelete) {
+		if (nullToDelete === null) {
 			this.removeAttribute(prop);
 			return this;
 		}
-		this.setAttribute(prop, val);
+		this.setAttribute(prop, nullToDelete);
 		return this;
 	}
 
