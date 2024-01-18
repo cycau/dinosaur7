@@ -1,0 +1,15 @@
+<div>
+    <span>LAYOUT[L01]</span>
+    <div d7page class="_d71023">TEMP PAGE</div>
+</div>
+
+<script>
+    console.log('[USER SCRIPT] LAYOUT[L01]');
+    d7.init({});
+    console.log('[d7] ' + d7.id);
+
+    d7.afterInit = function() {
+        console.log('[after init d7] ' + d7.id);
+    }
+
+</script>
