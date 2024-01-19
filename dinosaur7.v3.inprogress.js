@@ -8,7 +8,7 @@
  * d7app, d7layout, d7page, d7comp
  * d7, d7event, d7key, d7dummy
  ******************************************/
-const _d7Mode = 'dev'; 
+let _D7_RUN_MODE = 'dev'; 
 let _D7_PAGE_BASE = '';
 let _D7_PAGE_EXTENSION = '.html';
 let _D7_PAGE_DEFAULT_LAYOUT = '';
@@ -16,20 +16,18 @@ class D7App {
 	constructor() {
 		this._GLOBAL = {};
 		this._MOUNT_POINT = null;
+		this._HIST_PAGE = {};
 	}
 
 	setting = function(opt) {
+		if (!opt) opt = {};
 
+		_D7_RUN_MODE = opt.runMode || _D7_RUN_MODE;
 		_D7_PAGE_BASE = opt.pageBase || _D7_PAGE_BASE;
 		_D7_PAGE_EXTENSION = opt.pageExtension || _D7_PAGE_EXTENSION;
 		_D7_PAGE_DEFAULT_LAYOUT = opt.defaultLayout || _D7_PAGE_DEFAULT_LAYOUT;
-		this.topPage = opt.topPage;
+		this.opt = opt;
 
-		const preload = opt.preload || [];
-		for (const pageUrl of preload) {
-			let pageInfo = D7Util.parseUrl(pageUrl);
-			D7Page.load(pageInfo.path);
-		}
 	}
 
 	// on document load
@@ -37,22 +35,47 @@ class D7App {
 
 		this._MOUNT_POINT = document.querySelector('[d7App]');
 		if (!this._MOUNT_POINT) d7error('no [d7App] defined in root html.');
+		this._MOUNT_POINT.innerHTML = '';
 
-		let pageInfo = D7Util.parseUrl(this.topPage || window.location.href);
+		let pageInfo = D7Util.parseUrl(this.opt.topPage || window.location.href);
 		if (pageInfo.query.d7Page) {
 			pageInfo = D7Util.parseUrl(pageInfo.query.d7Page);
 		}
 
 		if ((_D7_PAGE_BASE + pageInfo.path) === D7Util.parseUrl(window.location.href).path) d7error('Not specified topPage or d7page.');
-		if (this.init && this.init(pageInfo.path, pageInfo.query) === false) d7error('Initialized d7App failed int init().');
+		if (this.init) await this.init(pageInfo.path, pageInfo.query);
+		/* u can do this in d7app.init()
+		const preload = this.opt.preload || [];
+		for (const pagePath of preload) {
+			await D7Template.load(pagePath);
+		}
+		*/
 
 		this._MOUNT_POINT.innerHTML = '';
+		if (_D7_PAGE_EXTENSION) pageInfo.path = pageInfo.path.replace(/\.\w+$/, _D7_PAGE_EXTENSION);
 		const entryPage = await D7Page.load(pageInfo.path);
 		await entryPage.mount(pageInfo.query, this._MOUNT_POINT);
 	}
 
-	route = async function(pageUrl, ) {
+	route = async function(pageUrl, prevStatus) {
+		const currPagePath = this._MOUNT_POINT.querySelector('[_d7page]').getAttribute('_d7page');
+		this._HIST_PAGE[currPagePath] = this._MOUNT_POINT;
+
 		const pageInfo = D7Util.parseUrl(pageUrl);
+		if (_D7_PAGE_EXTENSION) pageInfo.path = pageInfo.path.replace(/\.\w+$/, _D7_PAGE_EXTENSION);
+
+		if (prevStatus && this._HIST_PAGE[pageInfo.path]) {
+			this._MOUNT_POINT.replaceWith(this._HIST_PAGE[pageInfo.path]);
+			this._MOUNT_POINT = document.querySelector('[d7App]');
+			return;
+		}
+
+		const mountPoint = this._MOUNT_POINT.cloneNode(true);
+		const pageTag = mountPoint.querySelector('[d7page]');
+		if (pageTag) pageTag.innerHTML = ''; // hold layout
+		else mountPoint.innerHTML = '';
+		this._MOUNT_POINT.replaceWith(mountPoint);
+		this._MOUNT_POINT = mountPoint;
 		const d7Page = await D7Page.load(pageInfo.path);
 		await d7Page.mount(pageInfo.query, this._MOUNT_POINT);
 	}
@@ -85,7 +108,8 @@ class D7Page {
 	}
 
 	mount = async (query, mountPoint) => {
-		this._COMP.mount(query, mountPoint);
+		await this._COMP.mount(query, mountPoint);
+		this._COMP._MOUNT_POINT.setAttribute('_d7page', this._COMP._PATH);
 	}
 }
 /*******************************
@@ -94,8 +118,9 @@ class D7Page {
 let _d7id = 100;
 class D7Component {
 
-	constructor(template, defaultLayoutUrl) {
+	constructor(path, template, defaultLayoutUrl) {
 		this.id = _d7id++;
+		this._PATH = path;
 		this._TEMPLATE = template;
 		this._MOUNT_LAYOUT = null;
 		this._MOUNT_POINT = null;
@@ -103,16 +128,14 @@ class D7Component {
 	}
 
 	static load = async (path, defaultLayoutUrl) => {
-		const template = await D7Template.load(_D7_PAGE_BASE + path);
-		const d7Component = new D7Component(template, defaultLayoutUrl);
-
-		return d7Component;
+		const template = await D7Template.load(path);
+		return new D7Component(path, template, defaultLayoutUrl);
 	}
 
 	mount = async (query, mountPoint) => {
 		this._MOUNT_LAYOUT = mountPoint;
 		this._MOUNT_POINT = mountPoint;
-		mountPoint.style.display = "none";
+		this._MOUNT_LAYOUT.style.display = "none";
 
 		this.inited = false;
 		await this._TEMPLATE.fnUserScript.call(this, query, this);
@@ -121,42 +144,49 @@ class D7Component {
 
 	// call from fnUserScript()
 	init = async function(modelData) {
-		const layoutUrl = this._TEMPLATE.getLayoutUrl(modelData, this) || this._DEFAULT_LAYOUT_URL;
-		const currLayoutUrl = this._MOUNT_LAYOUT.getAttribute('[_d7layout]');
-		if (layoutUrl && layoutUrl !== currLayoutUrl) {
-			const layout = D7Util.parseUrl(layoutUrl);
-			const d7Layout = await D7Layout.load(layout.path);
-			await d7Layout.mount(layout.query, this._MOUNT_LAYOUT);
-			this._MOUNT_LAYOUT.setAttribute('_d7layout', layoutUrl);
-			const pagePoint = this._MOUNT_LAYOUT.querySelector('[d7page]');
-			if (!pagePoint) d7error('No [d7page] defined in layout. ' + layoutUrl);
+		const moutPoint = await this.mountLayout(modelData);
 
-			this._MOUNT_POINT = pagePoint;
+		for (var idx=0; idx < moutPoint.classList.length; idx++) {
+			const clazz = moutPoint.classList[idx];
+			if (clazz.startsWith('_d7') && !clazz.endsWith('c')) moutPoint.classList.remove(clazz);
 		}
-
-		for (var idx=0; idx < this._MOUNT_POINT.classList.length; idx++) {
-			const clazz = this._MOUNT_POINT.classList[idx];
-			if (clazz.startsWith('_d7') && !clazz.endsWith('c')) this._MOUNT_POINT.classList.remove(clazz);
-		}
-		this._MOUNT_POINT.classList.add(`_d7${this.id}`);
-		this._MOUNT_POINT.innerHTML = this._TEMPLATE.fnRender(modelData);
+		moutPoint.classList.add(`_d7${this.id}`);
+		moutPoint.innerHTML = this._TEMPLATE.fnRender(modelData);
 		if (this._TEMPLATE.fnStyle) {
 			var styleTag = document.createElement('style');
 			styleTag.innerHTML = this._TEMPLATE.fnStyle(`._d7${this.id}`, `._d7${this.id}c`);
-			this._MOUNT_POINT.insertBefore(styleTag, this._MOUNT_POINT.firstChild);
+			moutPoint.insertBefore(styleTag, moutPoint.firstChild);
 		}
-		this._TEMPLATE.fnBindEvent(this._MOUNT_POINT, this);
+		this._TEMPLATE.fnBindEvent(moutPoint, this);
 
-		var elements = this._MOUNT_POINT.querySelectorAll('[d7Comp]');
-		for (const mountPoint of elements) {
-			mountPoint.classList.add(`_d7${this.id}c`);
-			const compInfo = D7Util.parseUrl(mountPoint.getAttribute('d7Comp'));
+		var elements = moutPoint.querySelectorAll('[d7Comp]');
+		for (const compPoint of elements) {
+			compPoint.classList.add(`_d7${this.id}c`);
+			const compInfo = D7Util.parseUrl(compPoint.getAttribute('d7Comp'));
 			const comp = await D7Component.load(compInfo.path);
-			await comp.mount(compInfo.query, mountPoint);
+			await comp.mount(compInfo.query, compPoint);
 		}
 
-		this._MOUNT_POINT.style.display = "block";
 		this.inited = true;
+		this._MOUNT_LAYOUT.style.display = "block";
+	}
+
+	mountLayout = async function(modelData) {
+		const layoutUrl = this._TEMPLATE.getLayoutUrl(modelData) || this._DEFAULT_LAYOUT_URL;
+		const currLayoutUrl = this._MOUNT_LAYOUT.getAttribute('_d7layout');
+		if (!layoutUrl || layoutUrl === currLayoutUrl) {
+			const compTag = this._MOUNT_LAYOUT.querySelector('[d7page]');
+			if (compTag) this._MOUNT_POINT = compTag;
+			return this._MOUNT_POINT;
+		}
+
+		const layout = D7Util.parseUrl(layoutUrl);
+		const d7Layout = await D7Layout.load(layout.path);
+		await d7Layout.mount(layout.query, this._MOUNT_LAYOUT);
+		this._MOUNT_LAYOUT.setAttribute('_d7layout', layoutUrl);
+		const compTag = this._MOUNT_LAYOUT.querySelector('[d7page]');
+		if (!compTag) d7error('No [d7page] defined in layout. ' + layoutUrl);
+		return this._MOUNT_POINT = compTag;
 	}
 
 	render = async function(selector, modelData) {
@@ -263,29 +293,29 @@ class D7Template {
 
 		if (layoutExpr) this.fnLayoutInfo = d7compileHtml(layoutExpr);
 		this._TPLT_DOM = templateDom;
-		this._FUNC_PARTS = {};
+		this._RENDER_PARTS = {};
 	}
 
 	static load = async function(path) {
 		let d7Template = _D7_CACHE_TPLT[path];
 		if (d7Template) return d7Template;
 
-		const absPath = _D7_PAGE_BASE + path;
-		console.log('loading html...' + absPath);
-		let htmlText = await D7Api.loadHtml(absPath);
-		htmlText = d7normalizeLogic(htmlText)
+		path = _D7_PAGE_BASE + path + (path.match(/\.\w+$/)?'':_D7_PAGE_EXTENSION);
+		console.log('loading html...' + path);
+		let htmlText = await D7Api.loadHtml(path);
 		d7Template = new D7Template(htmlText);
+		_D7_CACHE_TPLT[path] = d7Template;
 
 		return d7Template;
 	}
 
-	getLayoutUrl = function(modelData, d7Owner) {
+	getLayoutUrl = function(modelData) {
 		if (!this.fnLayoutInfo) return "";
-		return this.fnLayoutInfo(modelData, d7Owner);
+		return this.fnLayoutInfo(modelData);
 	}
 
 	renderPart = function(selector, modelData) {
-		let fnRender = this._FUNC_PARTS[selector];
+		let fnRender = this._RENDER_PARTS[selector];
 		if (fnRender) {
 			return fnRender(modelData);
 		}
@@ -294,7 +324,7 @@ class D7Template {
 		if (!target) d7error(`Target element not exists in TEMPLATE. ${selector}`);
 
 		fnRender = d7compileHtml(target.innerHTML);
-		this._FUNC_PARTS[selector] = fnRender;
+		this._RENDER_PARTS[selector] = fnRender;
 		return fnRender(modelData);
 	}
 }
@@ -348,26 +378,20 @@ const d7escapeReg = function(str) {
 		.replace(/\$/g, "\\$")
 		.replace(/\-/g, "\\-")
 }
-/*****
- * {% xxx %}
- * normalize to <!-- {% xxx %} -->
- */
-const _D7_NL_REG_START = new RegExp(`(<!\\-\\-\\s*)?(${d7escapeReg(_D7_LOGIC.start)})`, "gm");
-const _D7_NL_REG_CLOSE = new RegExp(`(${d7escapeReg(_D7_LOGIC.close)})(\\s*\\-\\->)?`, "gm");
-const d7normalizeLogic = function(htmlText) {
-	htmlText = htmlText.replace(_D7_NL_REG_START, function (m, cmtStart, start) {return "<!-- " + start;})
-	htmlText = htmlText.replace(_D7_NL_REG_CLOSE, function (m, close, cmtClose) {return close + " -->";})
-	return htmlText;
-}
 /*******************************
  * analyze html
  *******************************/
+const _D7_NL_REG_START = new RegExp(`(<!\\-\\-\\s*)?(${d7escapeReg(_D7_LOGIC.start)})`, "gm");
+const _D7_NL_REG_CLOSE = new RegExp(`(${d7escapeReg(_D7_LOGIC.close)})(\\s*\\-\\->)?`, "gm");
 const d7analyze = function(htmlText) {
 	let firstTag = htmlText.match(/<\w+>/)
 	if (firstTag) firstTag = firstTag[0]
 	else firstTag = 'div'
-
 	var divTemp = d7makeContainer(firstTag);
+
+	// {% xxx %} normalize to <!-- {% xxx %} -->
+	htmlText = htmlText.replace(_D7_NL_REG_START, function (m, cmtStart, start) {return "<!-- " + start;})
+	htmlText = htmlText.replace(_D7_NL_REG_CLOSE, function (m, close, cmtClose) {return close + " -->";})
 	divTemp.innerHTML = htmlText;
 	var layoutExpr = "";
 	var scriptCode = "";
@@ -434,20 +458,20 @@ const d7prepareHtml = function(targetDom) {
 	const logicPool = {};
 	targetDom.querySelectorAll("[d7]").forEach(function(d7Tag) {
 		var d7expr = d7Tag.getAttribute("d7").trim();
+		d7Tag.removeAttribute('d7');
 		var pos = d7bracketsPos(d7expr, 0, '(', ')');
 		if (!pos) d7error("d7scanHtml: " + d7expr);
 
 		var ctl = d7expr.substring(0,pos[0]).trim();
 		var control = d7expr.substring(0,pos[1]+1).trim();
 		var logic = d7expr.substring(pos[1]+1).trim();
+		logicKey = `${prefix}${++idx}E`;
 		if (ctl === 'if') {
 			if (logic.match(/^continue|break/)) {
-				logicKey = `${prefix}${++idx}E`;
 				logicPool[logicKey] = `${_D7_LOGIC.start} ${d7expr}; ${_D7_LOGIC.close}`;
 				d7Tag.before(logicKey);
 				return;
 			}
-			logicKey = `${prefix}${++idx}E`;
 			logicPool[logicKey] = `${_D7_LOGIC.start} ${logic.startsWith('{') ? d7expr : `${control}{${logic}`}; ${_D7_LOGIC.close}`;
 			d7Tag.before(logicKey);
 			logicKey = `${prefix}${++idx}E`;
@@ -456,7 +480,6 @@ const d7prepareHtml = function(targetDom) {
 			return;
 		}
 		if (ctl === 'for') {
-			logicKey = `${prefix}${++idx}E`;
 			logicPool[logicKey] = `${_D7_LOGIC.start} ${logic.startsWith('{') ? d7expr : `${control}{${logic}`}; ${_D7_LOGIC.close}`;
 			d7Tag.before(logicKey);
 			logicKey = `${prefix}${++idx}E`;
@@ -540,7 +563,7 @@ const d7compileStyle = function(expr) {
  * UTIL
  *******************************/
 const d7error = function(msg) {
-	if (_d7Mode === 'dev') alert(msg);
+	if (_D7_RUN_MODE === 'dev') alert(msg);
 	throw new Error("[Dinosaur7]error! " + msg);
 }
 class D7Util {
@@ -600,6 +623,7 @@ const fn = D7App.prototype;
 fn.api = D7Api;
 fn.util = D7Util;
 const d7App = new D7App();
+const d7app = d7App;
 (function (global) {
 	switch (document.readyState) {
 		case "loading":
