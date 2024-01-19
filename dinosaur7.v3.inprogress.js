@@ -51,7 +51,6 @@ class D7App {
 		}
 		*/
 
-		this._MOUNT_POINT.innerHTML = '';
 		if (_D7_PAGE_EXTENSION) pageInfo.path = pageInfo.path.replace(/\.\w+$/, _D7_PAGE_EXTENSION);
 		const entryPage = await D7Page.load(pageInfo.path);
 		await entryPage.mount(pageInfo.query, this._MOUNT_POINT);
@@ -62,8 +61,6 @@ class D7App {
 		this._HIST_PAGE[currPagePath] = this._MOUNT_POINT;
 
 		const pageInfo = D7Util.parseUrl(pageUrl);
-		if (_D7_PAGE_EXTENSION) pageInfo.path = pageInfo.path.replace(/\.\w+$/, _D7_PAGE_EXTENSION);
-
 		if (prevStatus && this._HIST_PAGE[pageInfo.path]) {
 			this._MOUNT_POINT.replaceWith(this._HIST_PAGE[pageInfo.path]);
 			this._MOUNT_POINT = document.querySelector('[d7App]');
@@ -204,10 +201,10 @@ class D7Component {
 		this._TEMPLATE.fnBindEvent(targetDom, this);
 
 		var elements = targetDom.querySelectorAll('d7Comp');
-		for (const mountPoint of elements) {
-			const compInfo = D7Util.parseUrl(mountPoint.getAttribute('d7Comp'));
+		for (const compPoint of elements) {
+			const compInfo = D7Util.parseUrl(compPoint.getAttribute('d7Comp'));
 			const comp = await D7Component.load(compInfo.path);
-			await comp.mount(mountPoint, compInfo.query);
+			await comp.mount(compInfo.query, compPoint);
 		}
 	}
 
@@ -297,11 +294,13 @@ class D7Template {
 	}
 
 	static load = async function(path) {
+		path = _D7_PAGE_BASE + path;
+		if (!path.match(/\.\w+$/)) path = path + _D7_PAGE_EXTENSION
+
 		let d7Template = _D7_CACHE_TPLT[path];
 		if (d7Template) return d7Template;
 
-		path = _D7_PAGE_BASE + path + (path.match(/\.\w+$/)?'':_D7_PAGE_EXTENSION);
-		console.log('loading html...' + path);
+		console.log('loading html. ' + path);
 		let htmlText = await D7Api.loadHtml(path);
 		d7Template = new D7Template(htmlText);
 		_D7_CACHE_TPLT[path] = d7Template;
@@ -316,9 +315,7 @@ class D7Template {
 
 	renderPart = function(selector, modelData) {
 		let fnRender = this._RENDER_PARTS[selector];
-		if (fnRender) {
-			return fnRender(modelData);
-		}
+		if (fnRender) return fnRender(modelData);
 
 		const target = this._TPLT_DOM.querySelector(selector);
 		if (!target) d7error(`Target element not exists in TEMPLATE. ${selector}`);
