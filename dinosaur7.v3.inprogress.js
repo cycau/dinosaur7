@@ -175,7 +175,7 @@ class D7Component {
 		this._MOUNT_POINT = mountPoint;
 		this._MOUNT_LAYOUT.style.display = "none";
 
-		this.inited = false;
+		this._initialized = false;
 		await this._TEMPLATE.fnUserScript.call(this, query, this);
 		if (this.afterInit) this.afterInit(this);
 	}
@@ -205,7 +205,7 @@ class D7Component {
 			await comp.mount(compInfo.query, compPoint);
 		}
 
-		this.inited = true;
+		this._initialized = true;
 		this._MOUNT_LAYOUT.style.display = "block";
 	}
 
@@ -228,7 +228,7 @@ class D7Component {
 	}
 
 	render = async function(selector, modelData) {
-		if (!this.inited) d7error(`Need to call d7.init() first.`);
+		if (!this._initialized) d7error(`Need to call d7.init() first.`);
 		if (typeof selector !== 'string') d7error(`Need to specify selector.`);
 		/***
 		 * 仕様！
@@ -280,23 +280,24 @@ class D7Component {
 		return data;
 	}
 
+	/********************************************************************/
 	show = async function(visiable) {
 		if (visiable) return this._MOUNT_POINT.style.display = "block";
 		this._MOUNT_POINT.style.display = "none";
 	}
 	emitEvent = function(selector, eventName, val) {
 		var element = this._MOUNT_POINT.querySelector(selector);
-		if (!element) d7error("target not found in emitEvent. " + selector);
+		if (!element) d7error("Target not found for [emitEvent]. " + selector);
 		if (eventName.startsWith("on")) eventName = eventName.substring(2);
 		element.dispatchEvent(new Event(eventName, val));
 	}
-	s = function(selector, tarNo) {
+	s = function(selector, listNo) {
 		if (!selector) return this._MOUNT_POINT;
-		if (typeof tarNo === 'undefined') return this._MOUNT_POINT.querySelector(selector);
+		if (typeof listNo === 'undefined') return this._MOUNT_POINT.querySelector(selector);
 
 		var elements = this._MOUNT_POINT.querySelectorAll(selector);
-		if (elements.length < tarNo) return null;
-		return elements[tarNo-1];
+		if (elements.length < (listNo+1)) return null;
+		return elements[listNo];
 	}
 	S = function(selector) {
 		if (!selector) return [this._MOUNT_POINT];
@@ -597,17 +598,7 @@ const d7compileStyle = function(expr) {
 	}
 }
 
-
-
-
-
-
-
-
-
-
-
-/*******************************
+/*********************************************************************************************
  * UTIL
  *******************************/
 const d7error = function(msg) {
@@ -751,11 +742,11 @@ class D7Api {
 				if (request.status == 200) return resolve(response);
 
 				if (errorHandler) errorHandler('status', request.status);
-				else d7error(`Api error. GET ${url} status[${xhr.status}]`);
+				else d7error(`Api error. POST ${url} status[${xhr.status}]`);
 			}
 			request.onerror = function() {
 				if (errorHandler) errorHandler('onerror');
-				else d7error(`Api error. GET ${url} [onerror] occurred.`);
+				else d7error(`Api error. POST ${url} [onerror] occurred.`);
 			}
 			request.open("POST", url);
 			if (!headers["Content-Type"]) headers["Content-Type"] = "application/json; charset=utf-8";
@@ -785,11 +776,11 @@ class D7Api {
 				if (request.status == 200) return resolve(response);
 
 				if (errorHandler) errorHandler('status', request.status);
-				else d7error(`Api error. GET ${url} status[${xhr.status}]`);
+				else d7error(`Api error. PUT ${url} status[${xhr.status}]`);
 			}
 			request.onerror = function() {
 				if (errorHandler) errorHandler('onerror');
-				else d7error(`Api error. GET ${url} [onerror] occurred.`);
+				else d7error(`Api error. PUT ${url} [onerror] occurred.`);
 			}
 			request.open("PUT", url);
 			if (!headers["Content-Type"]) headers["Content-Type"] = "application/json; charset=utf-8";
@@ -820,11 +811,11 @@ class D7Api {
 				if (request.status == 200) return resolve(response);
 
 				if (errorHandler) errorHandler('status', request.status);
-				else d7error(`Api error. GET ${url} status[${xhr.status}]`);
+				else d7error(`Api error. DELETE ${url} status[${xhr.status}]`);
 			}
 			request.onerror = function() {
 				if (errorHandler) errorHandler('onerror');
-				else d7error(`Api error. GET ${url} [onerror] occurred.`);
+				else d7error(`Api error. DELETE ${url} [onerror] occurred.`);
 			}
 			request.open("DELETE", url);
 			for (var key in headers) {
@@ -839,7 +830,7 @@ class D7Api {
 /*******************************
  * extend Element
  *******************************/
-/* Element.s(selector, tarNo)	=> select one
+/* Element.s(selector, listNo)	=> select one
  * Element.S(selector)			=> select all
  * Element.getVal(attr)			=> priority[attr > value > innerHTML]
  * Element.setVal(val, attr)	=> priority[attr > value > innerHTML]
@@ -851,13 +842,13 @@ class D7Api {
  * Element.setAttr(prop, nullToDelete)
 */
 // selectOne
-Element.prototype.s = function(selector, tarNo) {
+Element.prototype.s = function(selector, listNo) {
 	if (!selector) return this;
 	if (typeof tarNo === 'undefined') return this.querySelector(selector);
 
 	var elements = this.querySelectorAll(selector);
-	if (elements.length < (tarNo)) return null;
-	return elements[tarNo-1];
+	if (elements.length < (listNo+1)) return null;
+	return elements[listNo];
 }
 // selectAll
 Element.prototype.S = function(selector) {
@@ -875,7 +866,7 @@ Element.prototype.getVal = function(attr) {
 }
 Element.prototype.setVal = function(val, attr) {
 	if (attr) {
-		if (attr == 'text' || attr === 'innerHTML') {this.innerHTML = val; return this;}
+		if (attr === 'text' || attr === 'innerHTML') {this.innerHTML = val; return this;}
 		this.setAttribute(attr, val);
 		return this
 	}
