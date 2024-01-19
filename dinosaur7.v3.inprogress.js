@@ -943,20 +943,12 @@ D7Component.prototype.api = D7Api;
 D7Component.prototype.util = D7Util;
 const d7App = new D7App();
 const d7app = d7App;
-(function (global) {
-	switch (document.readyState) {
-		case "loading":
-			document.addEventListener('DOMContentLoaded', function () {
-				d7App.start();
-			});
-			/*/ after image css loaded.
-			window.addEventListener("load", function () {
-				d7App.start();
-			});
-			*/
-			break;
-		default : // [interactive, complete]
-			d7App.start();
-			break;
-	}
-})(this);
+(function (global) { switch (document.readyState) {
+	case "loading":
+		document.addEventListener('DOMContentLoaded', function () { d7App.start(); });
+		//window.addEventListener("load", function () { d7App.start(); }); // after image css loaded.
+		break;
+	default : // [interactive, complete]
+		d7App.start();
+		break;
+}})(this);
