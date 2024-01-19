@@ -8,7 +8,7 @@
  * d7app, d7layout, d7page, d7comp
  * d7, d7event, d7key, d7dummy
  ******************************************/
-let _D7_RUN_MODE = 'dev'; 
+let _D7_DEV_MODE = 'dev'; 
 let _D7_PAGE_BASE = '';
 let _D7_PAGE_EXTENSION = '.html';
 let _D7_PAGE_DEFAULT_LAYOUT = '';
@@ -22,7 +22,7 @@ class D7App {
 	setting = function(opt) {
 		if (!opt) opt = {};
 
-		_D7_RUN_MODE = opt.runMode || _D7_RUN_MODE;
+		_D7_DEV_MODE = opt.devMode || _D7_DEV_MODE;
 		_D7_PAGE_BASE = opt.pageBase || _D7_PAGE_BASE;
 		_D7_PAGE_EXTENSION = opt.pageExtension || _D7_PAGE_EXTENSION;
 		_D7_PAGE_DEFAULT_LAYOUT = opt.defaultLayout || _D7_PAGE_DEFAULT_LAYOUT;
@@ -51,7 +51,6 @@ class D7App {
 		}
 		*/
 
-		if (_D7_PAGE_EXTENSION) pageInfo.path = pageInfo.path.replace(/\.\w+$/, _D7_PAGE_EXTENSION);
 		const entryPage = await D7Page.load(pageInfo.path);
 		await entryPage.mount(pageInfo.query, this._MOUNT_POINT);
 	}
@@ -78,10 +77,29 @@ class D7App {
 	}
 
 	storeData = function(key, val) {
+		try {
+			localStorage.setItem('dummytest', '1');
+			if (localStorage.getItem('dummytest') === '1') {
+				if (typeof val === 'undefined') return localStorage.getItem(key);
+				localStorage.setItem(key, val);
+				if (val != null) localStorage.setItem(key, val);
+				else localStorage.removeItem(key);
+				return;
+			}
+		} catch(e) {;}
+
 		if (typeof val === 'undefined') {
-			return this._GLOBAL[key];
+			var keyvals = {};
+			(document.cookie || '').split('; ').forEach(function(keyval) {
+	            var data = keyval.split('=');
+	            keyvals[data[0]] = decodeURIComponent(data[1]);
+			});
+			return keyvals[key];
 		}
-		this._GLOBAL[key] = val;
+		var expires = new Date();
+		if (val != null) expires.setTime(expires.getTime() + 365*24*60*60*1000);
+		else expires.setTime(expires.getTime() - 1000);
+		document.cookie = `${key}=${encodeURIComponent(val)}; expires=${expires.toGMTString()}`;
 	}
 }
 
@@ -107,6 +125,29 @@ class D7Page {
 	mount = async (query, mountPoint) => {
 		await this._COMP.mount(query, mountPoint);
 		this._COMP._MOUNT_POINT.setAttribute('_d7page', this._COMP._PATH);
+	}
+}
+/*******************************
+ * LAYOUT
+ *******************************/
+const _D7_CACHE_LAYOUT = {};
+class D7Layout {
+	constructor(comp) {
+		this._COMP = comp;
+	}
+
+	static load = async (path) => {
+		let d7Layout = _D7_CACHE_LAYOUT[path];
+		if (d7Layout) return d7Layout;
+
+		const comp = await D7Component.load(path);
+		d7Layout = new D7Layout(comp);
+		_D7_CACHE_LAYOUT[path] = d7Layout;
+		return d7Layout;
+	}
+
+	mount = async (query, mountPoint) => {
+		this._COMP.mount(query, mountPoint);
 	}
 }
 /*******************************
@@ -208,11 +249,6 @@ class D7Component {
 		}
 	}
 
-	show = async function(visiable) {
-		if (visiable) return this._MOUNT_POINT.style.display = "block";
-		this._MOUNT_POINT.style.display = "none";
-	}
-
 	collect = function(selector) {
 		const targetDom = this._MOUNT_DOM.s(selector);
 		if (!targetDom) d7error(`Target DOM not exists. ${selector}`);
@@ -243,29 +279,33 @@ class D7Component {
 		}
 		return data;
 	}
+
+	show = async function(visiable) {
+		if (visiable) return this._MOUNT_POINT.style.display = "block";
+		this._MOUNT_POINT.style.display = "none";
+	}
+	emitEvent = function(selector, eventName, val) {
+		var element = this._MOUNT_POINT.querySelector(selector);
+		if (!element) d7error("target not found in emitEvent. " + selector);
+		if (eventName.startsWith("on")) eventName = eventName.substring(2);
+		element.dispatchEvent(new Event(eventName, val));
+	}
+	s = function(selector, tarNo) {
+		if (!selector) return this._MOUNT_POINT;
+		if (typeof tarNo === 'undefined') return this._MOUNT_POINT.querySelector(selector);
+
+		var elements = this._MOUNT_POINT.querySelectorAll(selector);
+		if (elements.length < tarNo) return null;
+		return elements[tarNo-1];
+	}
+	S = function(selector) {
+		if (!selector) return [this._MOUNT_POINT];
+		return this._MOUNT_POINT.querySelectorAll(selector);
+	}
 }
-
-const _D7_CACHE_LAYOUT = {};
-class D7Layout {
-	constructor(comp) {
-		this._COMP = comp;
-	}
-
-	static load = async (path) => {
-		let d7Layout = _D7_CACHE_LAYOUT[path];
-		if (d7Layout) return d7Layout;
-
-		const comp = await D7Component.load(path);
-		d7Layout = new D7Layout(comp);
-		_D7_CACHE_LAYOUT[path] = d7Layout;
-		return d7Layout;
-	}
-
-	mount = async (query, mountPoint) => {
-		this._COMP.mount(query, mountPoint);
-	}
-}
-
+/*******************************
+ * TEMPLATE
+ *******************************/
 const _D7_CACHE_TPLT = {};
 class D7Template {
 	constructor(htmlText) {
@@ -438,14 +478,15 @@ const d7makeContainer = function(tagName) {
 	}
 	return divTmp;
 }
-/*********************************************************************
- * compile html.
- * example)
+/*******************************
+ * compile html
+ *******************************/
+/* example)
  * 	 <div d7="if|for" class="red [% %]" d7event="click, search(e)" d7value="key, attr">
  *   if (condition) continue | break
  *   if (condition) xxx; yyy; zzz; => if (condition) {xxx; yyy; zzz;
  *   for(condition) xxx; yyy; zzz; => for(condition) {xxx; yyy; zzz;
-/*********************************************************************/
+*/
 const _D7_PL_REG_START = new RegExp(d7escapeReg(_D7_PRINT.start), "gm");
 const _D7_PL_REG_CLOSE = new RegExp(d7escapeReg(_D7_PRINT.close), "gm");
 const d7prepareHtml = function(targetDom) {
@@ -556,17 +597,27 @@ const d7compileStyle = function(expr) {
 	}
 }
 
+
+
+
+
+
+
+
+
+
+
 /*******************************
  * UTIL
  *******************************/
 const d7error = function(msg) {
-	if (_D7_RUN_MODE === 'dev') alert(msg);
-	throw new Error("[Dinosaur7]error! " + msg);
+	if (_D7_DEV_MODE === 'dev') alert("[ERROR] " + msg);
+	throw new Error("[ERROR] " + msg);
+}
+const d7debug = function(msg) {
+	if (_D7_DEV_MODE === 'dev') console.log("[DEBUG] " + msg);
 }
 class D7Util {
-	static debug = function(data) {
-		console.log(data);
-	}
 	static equals = function(srcData, tarData) {
 		return false;
 	}
@@ -579,7 +630,56 @@ class D7Util {
 		});
 		return {path: url.pathname, query: query, origin: url.origin};
 	}
+	static encodeHtml = function(strHtml) {
+		strHtml = strHtml || '';
+		strHtml = strHtml.replace(/./g, function (c) {
+			return _D7_HTMLENCODE[c] || c; 
+		});
+		return strHtml
+	};
+	static stringifyUrl = function(url, queryMap) {
+		if (!queryMap) return url;
+		if (!Object.keys(queryMap).length) return url;
+
+		return url + "?" + Object.keys(queryMap).map(function (key) {
+			return key + "=" + encodeURIComponent(queryMap[key]);
+		}).join("&");
+	}
+	static stringifyJson = function(data) {
+		return JSON.stringify(data);
+	}
+	static parseJson = function(strJson) {
+		return JSON.parse(strJson);
+	}
+	// fmt: comma|date|datetime|time|elapsed
+	static format = function(value, fmt, fmtEx) {
+		if (fmt === 'comma') {
+			if (typeof value === 'string') value = Number(value);
+			return (value.toLocaleString() + (fmtEx||''));
+		}
+		if (fmt === 'elapsed') {
+
+		}
+		value = value.replaceAll(' ', '');
+		if (fmt === 'date') {
+			if (value.length > 7 ) return (value.substring(0,4) + fmtEx + value.substring(4,6) + fmtEx + value.substring(6,8));
+			error('wrong date value. ' + value);
+		}
+		if (fmt === 'datetime') {
+			if (value.length > 13) return (value.substring(0,4) + fmtEx + value.substring(4,6) + fmtEx + value.substring(6,8) + ' ' + value.substring(8,10) + ':' + value.substring(10,12) + ':' + value.substring(12,14));
+			error('wrong datetime value. ' + value);
+		}
+		if (fmt === 'time') {
+			if (value.length > 13) return (value.substring(8,10) + ':' + value.substring(10,12) + ':' + value.substring(12,14));
+			if (value.length >  5) return (value.substring(0,2) + ':' + value.substring(2,4) + ':' + value.substring(4,6));
+			error('wrong time value. ' + value);
+		}
+		error('wrong format.' + fmt);
+	}
 }
+/*******************************
+ * HTTP API
+ *******************************/
 class D7Api {
 	static loadHtml = (htmlUrl) => {
 		return new Promise((resolve, reject) => {
@@ -590,35 +690,266 @@ class D7Api {
 				if (request.status == 200) {
 					resolve(request.responseText);
 				} else {
-					reject(`http: ${htmlUrl} status[${request.status}]`);
+					reject(`loadHtml: ${htmlUrl} status[${request.status}]`);
 				}
 			}
 			request.onerror = function() {
-				reject(`http: ${htmlUrl} status[${request.status}]`);
+				reject(`loadHtml: ${htmlUrl} [onerror] occurred.`);
 			}
 			request.send();
 		});
 	}
-	static get = function(url, option, responseHandler, errorHandler) {
-		alert("not support yet.");
+	static get = function(url, querys, headers, errorHandler) {
+		return new Promise((resolve, reject) => {
+
+			if (!headers) headers = {};
+			url = D7Util.stringifyUrl(url, querys);
+	
+			const request = new XMLHttpRequest();
+			request.onload = function() {
+				let response;
+				if (request.getResponseHeader("Content-Type").toUpperCase().contains("JSON")) {
+					try{
+						response = JSON.parse(xhr.responseText);
+					}catch (e) {
+						if (errorHandler) errorHandler(e, xhr.responseText);
+						else d7error(e);
+					}
+				} else response = xhr.responseText;
+				if (request.status == 200) return resolve(response);
+
+				if (errorHandler) errorHandler('status', request.status);
+				else d7error(`Api error. GET ${url} status[${xhr.status}]`);
+			}
+			request.onerror = function() {
+				if (errorHandler) errorHandler('onerror');
+				else d7error(`Api error. GET ${url} [onerror] occurred.`);
+			}
+			request.open("GET", url);
+			for (var key in headers) {
+				xhr.setRequestHeader(key, headers[key]);
+			}
+			request.send();
+		});
 	}
-	static post = function(url, option, responseHandler, errorHandler) {
-		alert("not support yet.");
+	static post = function(url, data, headers, errorHandler) {
+		return new Promise((resolve, reject) => {
+
+			if (!headers) headers = {};
+	
+			const request = new XMLHttpRequest();
+			request.onload = function() {
+				let response;
+				if (request.getResponseHeader("Content-Type").toUpperCase().contains("JSON")) {
+					try{
+						response = JSON.parse(xhr.responseText);
+					}catch (e) {
+						if (errorHandler) errorHandler(e, xhr.responseText);
+						else d7error(e);
+					}
+				} else response = xhr.responseText;
+				if (request.status == 200) return resolve(response);
+
+				if (errorHandler) errorHandler('status', request.status);
+				else d7error(`Api error. GET ${url} status[${xhr.status}]`);
+			}
+			request.onerror = function() {
+				if (errorHandler) errorHandler('onerror');
+				else d7error(`Api error. GET ${url} [onerror] occurred.`);
+			}
+			request.open("POST", url);
+			if (!headers["Content-Type"]) headers["Content-Type"] = "application/json; charset=utf-8";
+			for (var key in options.headers) {
+				xhr.setRequestHeader(key, headers[key]);
+			}
+			if (headers["Content-Type"].toUpperCase().contains('JSON')) return request.send(JSON.stringify(data));
+			request.send(data);
+		});
 	}
-	static put = function(url, option, responseHandler, errorHandler) {
-		alert("not support yet.");
+	static put = function(url, data, headers, errorHandler) {
+		return new Promise((resolve, reject) => {
+
+			if (!headers) headers = {};
+	
+			const request = new XMLHttpRequest();
+			request.onload = function() {
+				let response;
+				if (request.getResponseHeader("Content-Type").toUpperCase().contains("JSON")) {
+					try{
+						response = JSON.parse(xhr.responseText);
+					}catch (e) {
+						if (errorHandler) errorHandler(e, xhr.responseText);
+						else d7error(e);
+					}
+				} else response = xhr.responseText;
+				if (request.status == 200) return resolve(response);
+
+				if (errorHandler) errorHandler('status', request.status);
+				else d7error(`Api error. GET ${url} status[${xhr.status}]`);
+			}
+			request.onerror = function() {
+				if (errorHandler) errorHandler('onerror');
+				else d7error(`Api error. GET ${url} [onerror] occurred.`);
+			}
+			request.open("PUT", url);
+			if (!headers["Content-Type"]) headers["Content-Type"] = "application/json; charset=utf-8";
+			for (var key in options.headers) {
+				xhr.setRequestHeader(key, headers[key]);
+			}
+			if (headers["Content-Type"].toUpperCase().contains('JSON')) return request.send(JSON.stringify(data));
+			request.send(data);
+		});
 	}
-	static delete = function(url, option, responseHandler, errorHandler) {
-		alert("not support yet.");
+	static delete = function(url, querys, headers, errorHandler) {
+		return new Promise((resolve, reject) => {
+
+			if (!headers) headers = {};
+			url = D7Util.stringifyUrl(url, querys);
+	
+			const request = new XMLHttpRequest();
+			request.onload = function() {
+				let response;
+				if (request.getResponseHeader("Content-Type").toUpperCase().contains("JSON")) {
+					try{
+						response = JSON.parse(xhr.responseText);
+					}catch (e) {
+						if (errorHandler) errorHandler(e, xhr.responseText);
+						else d7error(e);
+					}
+				} else response = xhr.responseText;
+				if (request.status == 200) return resolve(response);
+
+				if (errorHandler) errorHandler('status', request.status);
+				else d7error(`Api error. GET ${url} status[${xhr.status}]`);
+			}
+			request.onerror = function() {
+				if (errorHandler) errorHandler('onerror');
+				else d7error(`Api error. GET ${url} [onerror] occurred.`);
+			}
+			request.open("DELETE", url);
+			for (var key in headers) {
+				xhr.setRequestHeader(key, headers[key]);
+			}
+			request.send();
+		});
 	}
+}
+
+
+/*******************************
+ * extend Element
+ *******************************/
+/* Element.s(selector, tarNo)	=> select one
+ * Element.S(selector)			=> select all
+ * Element.getVal(attr)			=> priority[attr > value > innerHTML]
+ * Element.setVal(val, attr)	=> priority[attr > value > innerHTML]
+ * Element.getStyle(prop)
+ * Element.setStyle(propOrMap, nullToDelete)
+ * Element.getClass(clazz)
+ * Element.setClass(clazzOrList, nullToDelete)
+ * Element.getAttr(prop)
+ * Element.setAttr(prop, nullToDelete)
+*/
+// selectOne
+Element.prototype.s = function(selector, tarNo) {
+	if (!selector) return this;
+	if (typeof tarNo === 'undefined') return this.querySelector(selector);
+
+	var elements = this.querySelectorAll(selector);
+	if (elements.length < (tarNo)) return null;
+	return elements[tarNo-1];
+}
+// selectAll
+Element.prototype.S = function(selector) {
+	if (!selector) return [this];
+	return this.querySelectorAll(selector);
+}
+// value priority[strAttr > value > innerHTML]
+Element.prototype.getVal = function(attr) {
+	if (attr) {
+		if (attr === 'text' || attr === 'innerHTML') return this.innerHTML;
+		return this.getAttribute(attr);
+	}
+	if (typeof this.value !== 'undefined') return this.value;
+	return this.innerHTML;
+}
+Element.prototype.setVal = function(val, attr) {
+	if (attr) {
+		if (attr == 'text' || attr === 'innerHTML') {this.innerHTML = val; return this;}
+		this.setAttribute(attr, val);
+		return this
+	}
+	if (typeof this.value !== 'undefined') {this.value = val; return this;}
+	this.innerHTML = val;
+	return this;
+}
+// style
+Element.prototype.getStyle = function(prop) {
+	if (prop) return this.style[prop];
+
+	var css = {};
+	(this.style.cssText || '').split(';').forEach(function(str){
+		var cssunit = str.split(':');
+		if (cssunit.length < 2) return;
+		css[cssunit[0].trim()] = cssunit[1].trim();
+	})
+	return css;
+};
+Element.prototype.setStyle = function(propOrMap, nullToDelete) {
+	if (typeof propOrMap === 'string') {
+		this.style[propOrMap] = nullToDelete;
+		return this;
+	}
+	for (var key in propOrMap) {
+		this.style[key] = propOrMap[key];
+	}
+	return this;
+};
+// class
+Element.prototype.getClass = function(clazz) {
+	if (clazz) {
+		if (this.classList.contains(clazz)) return clazz;
+		return null;
+	}
+	var clazz = [];
+	for (var idx=0; idx < this.classList.length; idx++) {
+		clazz.push(this.classList[idx]);
+	}
+	return clazz;
+}
+Element.prototype.setClass = function(clazzOrList, nullToDelete) {
+	if (typeof clazzOrList === 'string') {
+		if (nullToDelete === null) {
+			this.classList.remove(clazzOrList);
+			return this;
+		}
+		this.classList.add(clazzOrList);
+		return this;
+	}
+	for (var idx=0; idx < clazzOrList.length; idx++) {
+		this.classList.add(clazzOrList[idx]);
+	}
+	return this;
+}
+// attribute
+Element.prototype.getAttr = function(prop) {
+	if (!this.hasAttribute(prop)) return null;
+	return this.getAttribute(prop) || '';
+}
+Element.prototype.setAttr = function(prop, nullToDelete) {
+	if (nullToDelete === null) {
+		this.removeAttribute(prop);
+		return this;
+	}
+	this.setAttribute(prop, nullToDelete);
+	return this;
 }
 
 /*******************************
  * RUNTIME
  *******************************/
-const fn = D7App.prototype;
-fn.api = D7Api;
-fn.util = D7Util;
+D7Component.prototype.api = D7Api;
+D7Component.prototype.util = D7Util;
 const d7App = new D7App();
 const d7app = d7App;
 (function (global) {
