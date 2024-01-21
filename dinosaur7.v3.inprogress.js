@@ -1,5 +1,11 @@
 /******************************************
  * [Dinosaur7]
+ * @author kougen.sai
+ * @author cycauo@gmail.com
+ * @version 3.0
+ * @keyword simple pure html client framework, frontend, React, Vue, Angular, SPA
+ * this framework help you to implement SPA with basic skill no longer need to hard work.
+ * The name [Dinosaur7] comes from that My daughter loved dinosaurs when she was 7 years old.
  * 
  * proxy !*.html -
  * proxy /${PAGE_BASE_URL}/*.html -
@@ -691,6 +697,15 @@ class D7Api {
 			}
 			request.send();
 		});
+	}
+	static loadHtml2 = (htmlUrl) => {
+		let request = new XMLHttpRequest();
+		request.open('GET', htmlUrl, false);
+		request.send();
+
+		if (request.status == 200) return request.responseText;
+
+		d7error(`loadHtml: ${htmlUrl} status[${request.status}]`);
 	}
 	static get = function(url, querys, headers, errorHandler) {
 		return new Promise((resolve, reject) => {
