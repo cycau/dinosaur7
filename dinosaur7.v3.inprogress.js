@@ -12,6 +12,7 @@ let _D7_DEV_MODE = 'dev';
 let _D7_PAGE_BASE = '';
 let _D7_PAGE_EXTENSION = '.html';
 let _D7_PAGE_DEFAULT_LAYOUT = '';
+let _D7_PROCESSING_TAG = null;
 class D7App {
 	constructor() {
 		this._GLOBAL = {};
@@ -32,15 +33,13 @@ class D7App {
 
 	// on document load
 	start = async function() {
-
+		// page's mount point
 		this._MOUNT_POINT = document.querySelector('[d7App]');
 		if (!this._MOUNT_POINT) d7error('no [d7App] defined in root html.');
 		this._MOUNT_POINT.innerHTML = '';
 
 		let pageInfo = D7Util.parseUrl(this.opt.topPage || window.location.href);
-		if (pageInfo.query.d7Page) {
-			pageInfo = D7Util.parseUrl(pageInfo.query.d7Page);
-		}
+		if (pageInfo.query.d7Page) pageInfo = D7Util.parseUrl(pageInfo.query.d7Page);
 
 		if ((_D7_PAGE_BASE + pageInfo.path) === D7Util.parseUrl(window.location.href).path) d7error('Not specified topPage or d7page.');
 		if (this.init) await this.init(pageInfo.path, pageInfo.query);
@@ -73,7 +72,11 @@ class D7App {
 		this._MOUNT_POINT.replaceWith(mountPoint);
 		this._MOUNT_POINT = mountPoint;
 		const d7Page = await D7Page.load(pageInfo.path);
-		await d7Page.mount(pageInfo.query, this._MOUNT_POINT);
+		return await d7Page.mount(pageInfo.query, this._MOUNT_POINT);
+	}
+
+	modal = async function(pagePath, autoClose) {
+		return await D7Modal.load(pagePath, autoClose);
 	}
 
 	storeData = function(key, val) {
@@ -98,7 +101,7 @@ class D7App {
 		}
 		var expires = new Date();
 		if (val != null) expires.setTime(expires.getTime() + 365*24*60*60*1000);
-		else expires.setTime(expires.getTime() - 1000);
+		else expires.setTime(expires.getTime() - 1000); // for delete
 		document.cookie = `${key}=${encodeURIComponent(val)}; expires=${expires.toGMTString()}`;
 	}
 }
@@ -150,6 +153,54 @@ class D7Layout {
 		this._COMP.mount(query, mountPoint);
 	}
 }
+/*******************************
+ * MODAL
+ *******************************/
+class D7Modal {
+	constructor(comp) {
+		this._COMP = comp;
+
+		let tmpDiv = document.createElement('div');
+		tmpDiv.innerHTML = "<div class='d7_modal_overlay'><div class='d7_modal_form'></div></div>";
+		this.form = tmpDiv.querySelector('.d7_modal_form');
+		this.container = tmpDiv.querySelector('.d7_modal_overlay');
+		this.form.onclick = function(e) {e.stopPropagation();}
+	}
+
+	static load = async (path, autoClose) => {
+
+		const comp = await D7Component.load(path);
+		const d7Modal = new D7Modal(comp);
+
+		comp.close = () => { d7Modal.close(); }
+		if (autoClose)  d7Modal.container.onclick = function() {d7Modal.close();};
+		else 			d7Modal.container.onclick = function() {};
+
+		return d7Modal;
+	}
+
+	open = async (query, callback) => {
+
+		this._COMP.callParent = callback;
+		await this._COMP.mount(query, this.form);
+
+		document.body.appendChild(this.container);
+		this.container.classList.remove("d7_modal_overlay_closing");
+		setTimeout(function(container) {
+			container.classList.add("d7_modal_overlay_show");
+		}, 10, this.container);
+	}
+
+	close = () => {
+		this.container.classList.remove("d7_modal_overlay_show");
+		this.container.classList.add("d7_modal_overlay_closing");
+
+		setTimeout(function(container) {
+			document.body.removeChild(container);
+		}, 500, this.container);
+	}
+}
+
 /*******************************
  * COMPONENT
  *******************************/
@@ -598,9 +649,20 @@ const d7compileStyle = function(expr) {
 	}
 }
 
-/*********************************************************************************************
- * UTIL
- *******************************/
+// loading icon
+var tmpDiv = document.createElement('div');
+tmpDiv.innerHTML = "<div style='display:block' class='d7_processing_overlay'><div class='d7_processing_form'><span class='d7_processing'>processing</span></div></div>";
+const _d7_processing = tmpDiv.firstChild;
+const d7processing = function(start) {
+	if (!document.body) return;
+	if (start === false) {
+		try {return document.body.removeChild(_d7_processing);}
+		catch(e) {}
+		return;
+	}
+
+	document.body.appendChild(_d7_processing);
+}
 const d7error = function(msg) {
 	if (_D7_DEV_MODE === 'dev') alert("[ERROR] " + msg);
 	throw new Error("[ERROR] " + msg);
@@ -608,67 +670,7 @@ const d7error = function(msg) {
 const d7debug = function(msg) {
 	if (_D7_DEV_MODE === 'dev') console.log("[DEBUG] " + msg);
 }
-class D7Util {
-	static equals = function(srcData, tarData) {
-		return false;
-	}
-	static parseUrl = function(strUrl) {
-		var query = {};
-		strUrl = strUrl.startsWith("http") ? strUrl : ("http://tmp.com" + strUrl);
-		const url = new URL(strUrl);
-		(new URLSearchParams(url.search)).forEach(function(value, key) {
-			query[key] = value;
-		});
-		return {path: url.pathname, query: query, origin: url.origin};
-	}
-	static encodeHtml = function(strHtml) {
-		strHtml = strHtml || '';
-		strHtml = strHtml.replace(/./g, function (c) {
-			return _D7_HTMLENCODE[c] || c; 
-		});
-		return strHtml
-	};
-	static stringifyUrl = function(url, queryMap) {
-		if (!queryMap) return url;
-		if (!Object.keys(queryMap).length) return url;
-
-		return url + "?" + Object.keys(queryMap).map(function (key) {
-			return key + "=" + encodeURIComponent(queryMap[key]);
-		}).join("&");
-	}
-	static stringifyJson = function(data) {
-		return JSON.stringify(data);
-	}
-	static parseJson = function(strJson) {
-		return JSON.parse(strJson);
-	}
-	// fmt: comma|date|datetime|time|elapsed
-	static format = function(value, fmt, fmtEx) {
-		if (fmt === 'comma') {
-			if (typeof value === 'string') value = Number(value);
-			return (value.toLocaleString() + (fmtEx||''));
-		}
-		if (fmt === 'elapsed') {
-
-		}
-		value = value.replaceAll(' ', '');
-		if (fmt === 'date') {
-			if (value.length > 7 ) return (value.substring(0,4) + fmtEx + value.substring(4,6) + fmtEx + value.substring(6,8));
-			error('wrong date value. ' + value);
-		}
-		if (fmt === 'datetime') {
-			if (value.length > 13) return (value.substring(0,4) + fmtEx + value.substring(4,6) + fmtEx + value.substring(6,8) + ' ' + value.substring(8,10) + ':' + value.substring(10,12) + ':' + value.substring(12,14));
-			error('wrong datetime value. ' + value);
-		}
-		if (fmt === 'time') {
-			if (value.length > 13) return (value.substring(8,10) + ':' + value.substring(10,12) + ':' + value.substring(12,14));
-			if (value.length >  5) return (value.substring(0,2) + ':' + value.substring(2,4) + ':' + value.substring(4,6));
-			error('wrong time value. ' + value);
-		}
-		error('wrong format.' + fmt);
-	}
-}
-/*******************************
+/*********************************************************************************************
  * HTTP API
  *******************************/
 class D7Api {
@@ -826,21 +828,9 @@ class D7Api {
 	}
 }
 
-
 /*******************************
  * extend Element
  *******************************/
-/* Element.s(selector, listNo)	=> select one
- * Element.S(selector)			=> select all
- * Element.getVal(attr)			=> priority[attr > value > innerHTML]
- * Element.setVal(val, attr)	=> priority[attr > value > innerHTML]
- * Element.getStyle(prop)
- * Element.setStyle(propOrMap, nullToDelete)
- * Element.getClass(clazz)
- * Element.setClass(clazzOrList, nullToDelete)
- * Element.getAttr(prop)
- * Element.setAttr(prop, nullToDelete)
-*/
 // selectOne
 Element.prototype.s = function(selector, listNo) {
 	if (!selector) return this;
@@ -856,22 +846,42 @@ Element.prototype.S = function(selector) {
 	return this.querySelectorAll(selector);
 }
 // value priority[strAttr > value > innerHTML]
-Element.prototype.getVal = function(attr) {
-	if (attr) {
-		if (attr === 'text' || attr === 'innerHTML') return this.innerHTML;
-		return this.getAttribute(attr);
+Element.prototype.getVal = function() {
+	if (this.hasAttribute('d7key')) {
+		const d7key = this.getAttribute('d7key').split(',');
+		const attr = d7key[1]?.trim() || null;
+		if (attr) {
+			if (attr === 'text' || attr === 'innerHTML') return this.innerHTML;
+			return this.getAttribute(attr);
+		}
 	}
 	if (typeof this.value !== 'undefined') return this.value;
 	return this.innerHTML;
 }
-Element.prototype.setVal = function(val, attr) {
-	if (attr) {
-		if (attr === 'text' || attr === 'innerHTML') {this.innerHTML = val; return this;}
-		this.setAttribute(attr, val);
-		return this
+Element.prototype.setVal = function(val) {
+	if (this.hasAttribute('d7key')) {
+		const d7key = this.getAttribute('d7key').split(',');
+		const attr = d7key[1]?.trim() || null;
+		if (attr) {
+			if (attr === 'text' || attr === 'innerHTML') {this.innerHTML = val; return this;}
+			return this.getAttribute(attr);
+		}
 	}
 	if (typeof this.value !== 'undefined') {this.value = val; return this;}
 	this.innerHTML = val;
+	return this;
+}
+// attribute
+Element.prototype.getAttr = function(prop) {
+	if (!this.hasAttribute(prop)) return null;
+	return this.getAttribute(prop) || '';
+}
+Element.prototype.setAttr = function(prop, val) {
+	this.setAttribute(prop, val);
+	return this;
+}
+Element.prototype.rmvAttr = function(prop) {
+	this.removeAttribute(prop);
 	return this;
 }
 // style
@@ -886,14 +896,18 @@ Element.prototype.getStyle = function(prop) {
 	})
 	return css;
 };
-Element.prototype.setStyle = function(propOrMap, nullToDelete) {
+Element.prototype.setStyle = function(propOrMap, val) {
 	if (typeof propOrMap === 'string') {
-		this.style[propOrMap] = nullToDelete;
+		this.style[propOrMap] = val;
 		return this;
 	}
 	for (var key in propOrMap) {
 		this.style[key] = propOrMap[key];
 	}
+	return this;
+};
+Element.prototype.rmvStyle = function(prop) {
+	this.style[prop] = null;
 	return this;
 };
 // class
@@ -908,12 +922,8 @@ Element.prototype.getClass = function(clazz) {
 	}
 	return clazz;
 }
-Element.prototype.setClass = function(clazzOrList, nullToDelete) {
+Element.prototype.setClass = function(clazzOrList) {
 	if (typeof clazzOrList === 'string') {
-		if (nullToDelete === null) {
-			this.classList.remove(clazzOrList);
-			return this;
-		}
 		this.classList.add(clazzOrList);
 		return this;
 	}
@@ -922,18 +932,90 @@ Element.prototype.setClass = function(clazzOrList, nullToDelete) {
 	}
 	return this;
 }
-// attribute
-Element.prototype.getAttr = function(prop) {
-	if (!this.hasAttribute(prop)) return null;
-	return this.getAttribute(prop) || '';
-}
-Element.prototype.setAttr = function(prop, nullToDelete) {
-	if (nullToDelete === null) {
-		this.removeAttribute(prop);
+Element.prototype.rmvClass = function(clazzOrList) {
+	if (typeof clazzOrList === 'string') {
+		this.classList.remove(clazzOrList);
 		return this;
 	}
-	this.setAttribute(prop, nullToDelete);
+	for (var idx=0; idx < clazzOrList.length; idx++) {
+		this.classList.remove(clazzOrList[idx]);
+	}
 	return this;
+}
+
+/*********************************************************************************************
+ * UTIL
+ *******************************/
+class D7Util {
+	static equals = function(srcData, tarData) {
+		if (typeof srcData !== typeof tarData) return false;
+
+		const srcKeys = Object.keys(srcData);
+		if (srcKeys.length>0) {
+			if (srcKeys.length !== Object.keys(tarData).length) return false;
+			for (const idx in srcKeys) {
+				if (srcData[srcKeys[idx]] !== tarData[srcKeys[idx]]) return false;
+			}
+			return true;
+		}
+
+		return srcData == tarData;
+	}
+	static parseUrl = function(strUrl) {
+		var query = {};
+		strUrl = strUrl.startsWith("http") ? strUrl : ("http://test.com" + strUrl);
+		const url = new URL(strUrl);
+		(new URLSearchParams(url.search)).forEach(function(value, key) {
+			query[key] = value;
+		});
+		return {path: url.pathname, query: query, origin: url.origin};
+	}
+	static stringifyUrl = function(url, queryMap) {
+		if (!queryMap) return url;
+		if (!Object.keys(queryMap).length) return url;
+
+		return url + "?" + Object.keys(queryMap).map(function (key) {
+			return key + "=" + encodeURIComponent(queryMap[key]);
+		}).join("&");
+	}
+	static encodeHtml = function(strHtml) {
+		strHtml = strHtml || '';
+		strHtml = strHtml.replace(/./g, function (c) {
+			return _D7_HTMLENCODE[c] || c; 
+		});
+		return strHtml
+	};
+	static stringifyJson = function(data) {
+		return JSON.stringify(data);
+	}
+	static parseJson = function(strJson) {
+		return JSON.parse(strJson);
+	}
+	// fmt: comma|date|datetime|time|elapsed
+	static format = function(value, fmt, fmtEx) {
+		if (fmt === 'comma') {
+			if (typeof value === 'string') value = Number(value);
+			return (value.toLocaleString() + (fmtEx||''));
+		}
+		if (fmt === 'elapsed') {
+
+		}
+		value = value.replaceAll(' ', '');
+		if (fmt === 'date') {
+			if (value.length > 7 ) return (value.substring(0,4) + fmtEx + value.substring(4,6) + fmtEx + value.substring(6,8));
+			error('wrong date value. ' + value);
+		}
+		if (fmt === 'datetime') {
+			if (value.length > 13) return (value.substring(0,4) + fmtEx + value.substring(4,6) + fmtEx + value.substring(6,8) + ' ' + value.substring(8,10) + ':' + value.substring(10,12) + ':' + value.substring(12,14));
+			error('wrong datetime value. ' + value);
+		}
+		if (fmt === 'time') {
+			if (value.length > 13) return (value.substring(8,10) + ':' + value.substring(10,12) + ':' + value.substring(12,14));
+			if (value.length >  5) return (value.substring(0,2) + ':' + value.substring(2,4) + ':' + value.substring(4,6));
+			error('wrong time value. ' + value);
+		}
+		error('wrong format.' + fmt);
+	}
 }
 
 /*******************************
