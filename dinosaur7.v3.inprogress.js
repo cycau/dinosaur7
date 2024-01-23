@@ -4,21 +4,30 @@
  * @author cycauo@gmail.com
  * @version 3.0
  * @keyword simple pure html client framework, frontend, React, Vue, Angular, SPA
- * this framework help you to implement SPA with basic skill no longer need to hard work.
+ * this framework help you to implement SPA with basic skill and no longer need to hard work.
  * The name [Dinosaur7] comes from that My daughter loved dinosaurs when she was 7 years old.
  * 
- * proxy !*.html -
- * proxy /${PAGE_BASE_URL}/*.html -
- * proxy * /index.html
+ * Server side setting
+ *   proxy !*.html -
+ *   proxy /${PAGE_BASE_URL}/*.html -
+ *   proxy * /index.html
  *
- * d7app, d7layout, d7page, d7comp
- * d7, d7event, d7key, d7dummy
+ * All D7 tag
+ *   d7app, d7layout, d7page, d7comp
+ *   d7, d7event, d7key, d7dummy
+ * 
+ * With Enterprise Version
+ *   1) run on async mode
+ *   2) recover prev status
+ *   3) authenticator
+ *   4) web server with api tester
+ *   5) full suport with customize
  ******************************************/
+
 let _D7_DEV_MODE = 'dev'; 
-let _D7_PAGE_BASE = '';
-let _D7_PAGE_EXTENSION = '.html';
-let _D7_PAGE_DEFAULT_LAYOUT = '';
-let _D7_PROCESSING_TAG = null;
+let _D7_BASE_URL = '';
+let _D7_DEFAULT_LAYOUT = '';
+let _D7_DEFAULT_EXTENSION = '';
 class D7App {
 	constructor() {
 		this._GLOBAL = {};
@@ -30,41 +39,43 @@ class D7App {
 		if (!opt) opt = {};
 
 		_D7_DEV_MODE = opt.devMode || _D7_DEV_MODE;
-		_D7_PAGE_BASE = opt.pageBase || _D7_PAGE_BASE;
-		_D7_PAGE_EXTENSION = opt.pageExtension || _D7_PAGE_EXTENSION;
-		_D7_PAGE_DEFAULT_LAYOUT = opt.defaultLayout || _D7_PAGE_DEFAULT_LAYOUT;
-		this.opt = opt;
+		_D7_BASE_URL = opt.baseUrl || _D7_BASE_URL;
+		_D7_DEFAULT_LAYOUT = opt.defaultLayout || _D7_DEFAULT_LAYOUT;
+		_D7_DEFAULT_EXTENSION = opt.defaultExtension || _D7_DEFAULT_EXTENSION;
 
+		this.topPage = opt.topPage || window.location.href;
+		this.routeDef = opt.route || [];
 	}
 
 	// on document load
 	start = async function() {
-		// page's mount point
+		let pageInfo = D7Util.parseUrl(this.topPage);
+		if ((_D7_BASE_URL + pageInfo.path) === D7Util.parseUrl(window.location.href).path) d7error('Not specified topPage or d7page.');
+
 		this._MOUNT_POINT = document.querySelector('[d7App]');
 		if (!this._MOUNT_POINT) d7error('no [d7App] defined in root html.');
 		this._MOUNT_POINT.innerHTML = '';
 
-		let pageInfo = D7Util.parseUrl(this.opt.topPage || window.location.href);
-		if (pageInfo.query.d7Page) pageInfo = D7Util.parseUrl(pageInfo.query.d7Page);
+		this.routeMap = {};
+		for (const row of this.routeDef) {
+			this.routeMap[row.name] = D7Util.parseUrl(row.url).path;
+			if (!row.preload) continue;
 
-		if ((_D7_PAGE_BASE + pageInfo.path) === D7Util.parseUrl(window.location.href).path) d7error('Not specified topPage or d7page.');
-		if (this.init) await this.init(pageInfo.path, pageInfo.query);
-		/* u can do this in d7app.init()
-		const preload = this.opt.preload || [];
-		for (const pagePath of preload) {
-			await D7Template.load(pagePath);
+			await D7Template.load(this.routeMap[row.name]);
 		}
-		*/
 
 		const entryPage = await D7Page.load(pageInfo.path);
 		await entryPage.mount(pageInfo.query, this._MOUNT_POINT);
 	}
 
-	route = async function(pageUrl, prevStatus) {
+	route = async function(pageNameOrUrl, params, prevStatus) {
 		const currPagePath = this._MOUNT_POINT.querySelector('[_d7page]').getAttribute('_d7page');
 		this._HIST_PAGE[currPagePath] = this._MOUNT_POINT;
 
-		const pageInfo = D7Util.parseUrl(pageUrl);
+		pageNameOrUrl = this.routeMap[pageNameOrUrl] || pageNameOrUrl;
+		const pageInfo = D7Util.parseUrl(pageNameOrUrl);
+		pageInfo.query = {...pageInfo.query, ...params};
+
 		if (prevStatus && this._HIST_PAGE[pageInfo.path]) {
 			this._MOUNT_POINT.replaceWith(this._HIST_PAGE[pageInfo.path]);
 			this._MOUNT_POINT = document.querySelector('[d7App]');
@@ -81,8 +92,9 @@ class D7App {
 		return await d7Page.mount(pageInfo.query, this._MOUNT_POINT);
 	}
 
-	modal = async function(pagePath, autoClose) {
-		return await D7Modal.load(pagePath, autoClose);
+	modal = async function(pageNameOrUrl, autoClose) {
+		pageNameOrUrl = this.routeMap[pageNameOrUrl] || pageNameOrUrl;
+		return await D7Modal.load(pageNameOrUrl, autoClose);
 	}
 
 	storeData = function(key, val) {
@@ -90,10 +102,10 @@ class D7App {
 			localStorage.setItem('dummytest', '1');
 			if (localStorage.getItem('dummytest') === '1') {
 				if (typeof val === 'undefined') return localStorage.getItem(key);
-				localStorage.setItem(key, val);
-				if (val != null) localStorage.setItem(key, val);
-				else localStorage.removeItem(key);
-				return;
+
+				if (val != null) return localStorage.setItem(key, val);
+
+				return localStorage.removeItem(key);
 			}
 		} catch(e) {;}
 
@@ -105,6 +117,7 @@ class D7App {
 			});
 			return keyvals[key];
 		}
+
 		var expires = new Date();
 		if (val != null) expires.setTime(expires.getTime() + 365*24*60*60*1000);
 		else expires.setTime(expires.getTime() - 1000); // for delete
@@ -125,7 +138,7 @@ class D7Page {
 		let d7Page = _D7_CACHE_PAGE[path];
 		if (d7Page) return d7Page;
 
-		const comp = await D7Component.load(path, _D7_PAGE_DEFAULT_LAYOUT);
+		const comp = await D7Component.load(path, _D7_DEFAULT_LAYOUT);
 		d7Page = new D7Page(comp);
 		_D7_CACHE_PAGE[path] = d7Page;
 		return d7Page;
@@ -156,7 +169,7 @@ class D7Layout {
 	}
 
 	mount = async (query, mountPoint) => {
-		this._COMP.mount(query, mountPoint);
+		await this._COMP.mount(query, mountPoint);
 	}
 }
 /*******************************
@@ -185,10 +198,10 @@ class D7Modal {
 		return d7Modal;
 	}
 
-	open = async (query, callback) => {
+	open = async (params, callback) => {
 
 		this._COMP.callParent = callback;
-		await this._COMP.mount(query, this.form);
+		await this._COMP.mount(params, this.form);
 
 		document.body.appendChild(this.container);
 		this.container.classList.remove("d7_modal_overlay_closing");
@@ -233,7 +246,14 @@ class D7Component {
 		this._MOUNT_LAYOUT.style.display = "none";
 
 		this._initialized = false;
-		await this._TEMPLATE.fnUserScript.call(this, query, this);
+		if (this._TEMPLATE.fnUserScript) {
+			d7debug(`Running UserScript. d7${this.id} ${this._PATH}`);
+			await this._TEMPLATE.fnUserScript.call(this, query, this);
+		} else {
+			d7debug(`Running d7.init({}) instead of UserScript. d7${this.id} ${this._PATH}`);
+			await d7.init({})
+		}
+
 		if (this.afterInit) this.afterInit(this);
 	}
 
@@ -338,7 +358,7 @@ class D7Component {
 	}
 
 	/********************************************************************/
-	show = async function(visiable) {
+	show = function(visiable) {
 		if (visiable) return this._MOUNT_POINT.style.display = "block";
 		this._MOUNT_POINT.style.display = "none";
 	}
@@ -372,7 +392,9 @@ class D7Template {
 		this.fnRender = d7compileHtml(d7prepareHtml(templateDom));
 		this.fnStyle = d7compileStyle(styleCode);
 		const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-		this.fnUserScript = new AsyncFunction("query", "d7", scriptCode || "d7.init({});");
+		if (scriptCode) {
+			this.fnUserScript = new AsyncFunction("query", "d7", scriptCode);
+		}
 		this.fnBindEvent = function(targetDom, d7Owner) {
 			targetDom.querySelectorAll("[d7event]").forEach(function(ele) {
 				const expr = ele.getAttribute("d7event");
@@ -392,13 +414,13 @@ class D7Template {
 	}
 
 	static load = async function(path) {
-		path = _D7_PAGE_BASE + path;
-		if (!path.match(/\.\w+$/)) path = path + _D7_PAGE_EXTENSION
+		path = _D7_BASE_URL + path;
+		if (!path.match(/\.\w+$/)) path = path + _D7_DEFAULT_EXTENSION
 
 		let d7Template = _D7_CACHE_TPLT[path];
 		if (d7Template) return d7Template;
 
-		console.log('loading html. ' + path);
+		d7debug('loading html. ' + path);
 		let htmlText = await D7Api.loadHtml(path);
 		d7Template = new D7Template(htmlText);
 		_D7_CACHE_TPLT[path] = d7Template;
@@ -698,7 +720,7 @@ class D7Api {
 			request.send();
 		});
 	}
-	static loadHtml2 = (htmlUrl) => {
+	static loadHtmlSync = (htmlUrl) => {
 		let request = new XMLHttpRequest();
 		request.open('GET', htmlUrl, false);
 		request.send();
