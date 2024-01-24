@@ -28,6 +28,7 @@ let _D7_DEV_MODE = 'dev';
 let _D7_BASE_URL = '';
 let _D7_DEFAULT_LAYOUT = '';
 let _D7_DEFAULT_EXTENSION = '';
+let _D7_ROUTE_MAP = {};
 class D7App {
 	constructor() {
 		this._GLOBAL = {};
@@ -49,20 +50,26 @@ class D7App {
 
 	// on document load
 	start = async function() {
-		let pageInfo = D7Util.parseUrl(this.topPage);
+		for (const row of this.routeDef) {
+			const pageId = row.name.toUpperCase();
+			const pageInfo = D7Util.parseUrl(row.url);
+			_D7_ROUTE_MAP[pageId] = {
+				name: row.name,
+				path: pageInfo.path,
+				query: pageInfo.query,
+				description: row.description,
+			};
+			if (!row.preload) continue;
+
+			await D7Template.load(_D7_ROUTE_MAP[pageId].path);
+		}
+
+		let pageInfo = d7parseUrl(this.topPage);
 		if ((_D7_BASE_URL + pageInfo.path) === D7Util.parseUrl(window.location.href).path) d7error('Not specified topPage or d7page.');
 
 		this._MOUNT_POINT = document.querySelector('[d7App]');
 		if (!this._MOUNT_POINT) d7error('no [d7App] defined in root html.');
 		this._MOUNT_POINT.innerHTML = '';
-
-		this.routeMap = {};
-		for (const row of this.routeDef) {
-			this.routeMap[row.name] = D7Util.parseUrl(row.url).path;
-			if (!row.preload) continue;
-
-			await D7Template.load(this.routeMap[row.name]);
-		}
 
 		const entryPage = await D7Page.load(pageInfo.path);
 		await entryPage.mount(pageInfo.query, this._MOUNT_POINT);
@@ -72,9 +79,7 @@ class D7App {
 		const currPagePath = this._MOUNT_POINT.querySelector('[_d7page]').getAttribute('_d7page');
 		this._HIST_PAGE[currPagePath] = this._MOUNT_POINT;
 
-		pageNameOrUrl = this.routeMap[pageNameOrUrl] || pageNameOrUrl;
-		const pageInfo = D7Util.parseUrl(pageNameOrUrl);
-		pageInfo.query = {...pageInfo.query, ...params};
+		const pageInfo = d7parseUrl(pageNameOrUrl);
 
 		if (prevStatus && this._HIST_PAGE[pageInfo.path]) {
 			this._MOUNT_POINT.replaceWith(this._HIST_PAGE[pageInfo.path]);
@@ -89,12 +94,11 @@ class D7App {
 		this._MOUNT_POINT.replaceWith(mountPoint);
 		this._MOUNT_POINT = mountPoint;
 		const d7Page = await D7Page.load(pageInfo.path);
-		return await d7Page.mount(pageInfo.query, this._MOUNT_POINT);
+		return await d7Page.mount({...pageInfo.query, ...params}, this._MOUNT_POINT);
 	}
 
-	modal = async function(pageNameOrUrl, autoClose) {
-		pageNameOrUrl = this.routeMap[pageNameOrUrl] || pageNameOrUrl;
-		return await D7Modal.load(pageNameOrUrl, autoClose);
+	modal = async function(pageNameOrPath, autoClose) {
+		return await D7Modal.load(d7parseUrl(pageNameOrPath).path, autoClose);
 	}
 
 	storeData = function(key, val) {
@@ -125,6 +129,14 @@ class D7App {
 	}
 }
 
+const d7parseUrl = (nameOrUrl) => {
+	nameOrUrl = nameOrUrl.trim();
+	if (nameOrUrl.startsWith('/')) return D7Util.parseUrl(nameOrUrl);
+
+	const pageInfo = _D7_ROUTE_MAP[nameOrUrl.toUpperCase()];
+	if (!pageInfo) d7error(`setting.route not defined. ${nameOrUrl}`);
+	return pageInfo;
+}
 /*******************************
  * PAGE
  *******************************/
@@ -277,7 +289,7 @@ class D7Component {
 		var elements = moutPoint.querySelectorAll('[d7Comp]');
 		for (const compPoint of elements) {
 			compPoint.classList.add(`_d7${this.id}c`);
-			const compInfo = D7Util.parseUrl(compPoint.getAttribute('d7Comp'));
+			const compInfo = d7parseUrl(compPoint.getAttribute('d7Comp'));
 			const comp = await D7Component.load(compInfo.path);
 			await comp.mount(compInfo.query, compPoint);
 		}
@@ -287,6 +299,8 @@ class D7Component {
 	}
 
 	mountLayout = async function(modelData) {
+		if (typeof this._DEFAULT_LAYOUT_URL === 'undefined') return this._MOUNT_POINT;
+
 		const layoutUrl = this._TEMPLATE.getLayoutUrl(modelData) || this._DEFAULT_LAYOUT_URL;
 		const currLayoutUrl = this._MOUNT_LAYOUT.getAttribute('_d7layout');
 		if (!layoutUrl || layoutUrl === currLayoutUrl) {
@@ -295,7 +309,7 @@ class D7Component {
 			return this._MOUNT_POINT;
 		}
 
-		const layout = D7Util.parseUrl(layoutUrl);
+		const layout = d7parseUrl(layoutUrl);
 		const d7Layout = await D7Layout.load(layout.path);
 		await d7Layout.mount(layout.query, this._MOUNT_LAYOUT);
 		this._MOUNT_LAYOUT.setAttribute('_d7layout', layoutUrl);
@@ -320,7 +334,7 @@ class D7Component {
 
 		var elements = targetDom.querySelectorAll('d7Comp');
 		for (const compPoint of elements) {
-			const compInfo = D7Util.parseUrl(compPoint.getAttribute('d7Comp'));
+			const compInfo = d7parseUrl(compPoint.getAttribute('d7Comp'));
 			const comp = await D7Component.load(compInfo.path);
 			await comp.mount(compInfo.query, compPoint);
 		}
