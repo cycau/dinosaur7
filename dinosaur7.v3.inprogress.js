@@ -12,15 +12,15 @@
  *   proxy /${PAGE_BASE_URL}/*.html -
  *   proxy * /index.html
  *
- * All D7 tag
- *   d7app, d7layout, d7page, d7comp
- *   d7, d7event, d7key, d7dummy
+ * All d7App tag
+ *   d7layout, d7page, d7comp
+ *   d7, d7key, d7dummy
  * 
  * With Enterprise Version
  *   1) run on async mode
  *   2) recover prev status
  *   3) authenticator
- *   4) web server with api tester
+ *   4) html server with api tester
  *   5) full suport with customize
  ******************************************/
 
@@ -498,8 +498,9 @@ const d7escapeReg = function(str) {
 /*******************************
  * analyze html
  *******************************/
-const _D7_NL_REG_START = new RegExp(`(<!\\-\\-\\s*)?(${d7escapeReg(_D7_LOGIC.start)})`, "gm");
-const _D7_NL_REG_CLOSE = new RegExp(`(${d7escapeReg(_D7_LOGIC.close)})(\\s*\\-\\->)?`, "gm");
+const _D7_NL_REG_START = new RegExp(`(<!\\-\\-\\s*)?(${d7escapeReg(_D7_LOGIC.start)})`, 'gm');
+const _D7_NL_REG_CLOSE = new RegExp(`(${d7escapeReg(_D7_LOGIC.close)})(\\s*\\-\\->)?`, 'gm');
+const _D7_NL_REG_EVENT = new RegExp(`\\s(onclick|ondblclick|onmousedown|onmouseup|onmouseover|onmousemove|onmouseout|onkeypress|onkeydown|onkeyup|onload|onunload|onfocus|onblur|onsubmit|onreset|onselect|onchange)=("|')`, 'igm');
 const d7analyze = function(htmlText) {
 	let firstTag = htmlText.match(/<\w+>/)
 	if (firstTag) firstTag = firstTag[0]
@@ -509,6 +510,7 @@ const d7analyze = function(htmlText) {
 	// {% xxx %} normalize to <!-- {% xxx %} -->
 	htmlText = htmlText.replace(_D7_NL_REG_START, function (m, cmtStart, start) {return "<!-- " + start;})
 	htmlText = htmlText.replace(_D7_NL_REG_CLOSE, function (m, close, cmtClose) {return close + " -->";})
+	htmlText = htmlText.replace(_D7_NL_REG_EVENT, function (m, eventName, quot) {return ' d7event=' + quot + eventName.substring(2) + ',';})
 	divTemp.innerHTML = htmlText;
 	var layoutExpr = "";
 	var scriptCode = "";
