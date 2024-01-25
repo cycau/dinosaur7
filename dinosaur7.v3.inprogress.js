@@ -44,45 +44,52 @@ class D7App {
 		_D7_DEFAULT_LAYOUT = opt.defaultLayout || _D7_DEFAULT_LAYOUT;
 		_D7_DEFAULT_EXTENSION = opt.defaultExtension || _D7_DEFAULT_EXTENSION;
 
-		this.topPage = opt.topPage || window.location.href;
-		this.routeDef = opt.route || [];
-	}
-
-	// on document load
-	start = async function() {
-		for (const row of this.routeDef) {
+		for (const row of (opt.route || [])) {
 			const pageId = row.name.toUpperCase();
-			const pageInfo = D7Util.parseUrl(row.url);
 			_D7_ROUTE_MAP[pageId] = {
 				name: row.name,
 				path: D7Util.parseUrl(row.url).path,
 				description: row.description,
+				preload: row.preload,
 			};
-			if (!row.preload) continue;
-
-			await D7Template.load(_D7_ROUTE_MAP[pageId].path);
 		}
 
-		let pageInfo = d7parseUrl(this.topPage);
-		if ((_D7_BASE_URL + pageInfo.path) === D7Util.parseUrl(window.location.href).path) d7error('Not specified topPage or d7page.');
+		this.topPageInfo = d7parseUrl(opt.topPage || window.location.href);
+		history.replaceState('', '', this.topPageInfo.path);
+	}
+
+	// on document load
+	start = async function() {
+		for (const key in _D7_ROUTE_MAP) {
+			if (!_D7_ROUTE_MAP[key].preload) continue;
+			await D7Template.load(_D7_ROUTE_MAP[key].path);
+		}
+
+		if ((_D7_BASE_URL + this.topPageInfo.path) === window.location.pathname) d7error('Not specified topPage or d7page.');
 
 		this._MOUNT_POINT = document.querySelector('[d7App]');
 		if (!this._MOUNT_POINT) d7error('no [d7App] defined in root html.');
-		this._MOUNT_POINT.innerHTML = '';
+		this.route(this.topPageInfo.path, this.topPageInfo.query);
 
-		const entryPage = await D7Page.load(pageInfo.path);
-		await entryPage.mount(pageInfo.query, this._MOUNT_POINT);
+		window.onpopstate = (e) => {
+			if (!e.state?.path) return;
+
+			const histPage = this._HIST_PAGE[e.state.path];
+			if (!histPage) return;
+			this._MOUNT_POINT.replaceWith(histPage);
+			this._MOUNT_POINT = document.querySelector('[d7App]');
+		};
 	}
 
 	route = async function(pageNameOrUrl, params, prevStatus) {
-		const currPagePath = this._MOUNT_POINT.querySelector('[_d7page]').getAttribute('_d7page');
-		this._HIST_PAGE[currPagePath] = this._MOUNT_POINT;
-
 		const pageInfo = d7parseUrl(pageNameOrUrl);
+		history.pushState({ path: pageInfo.path }, "title", pageInfo.path);
 
 		if (prevStatus && this._HIST_PAGE[pageInfo.path]) {
 			this._MOUNT_POINT.replaceWith(this._HIST_PAGE[pageInfo.path]);
 			this._MOUNT_POINT = document.querySelector('[d7App]');
+
+			this._HIST_PAGE[pageInfo.path] = this._MOUNT_POINT;
 			return;
 		}
 
@@ -92,8 +99,10 @@ class D7App {
 		else mountPoint.innerHTML = '';
 		this._MOUNT_POINT.replaceWith(mountPoint);
 		this._MOUNT_POINT = mountPoint;
+
 		const d7Page = await D7Page.load(pageInfo.path);
-		return await d7Page.mount({...pageInfo.query, ...params}, this._MOUNT_POINT);
+		await d7Page.mount({...pageInfo.query, ...params}, this._MOUNT_POINT);
+		this._HIST_PAGE[pageInfo.path] = this._MOUNT_POINT;
 	}
 
 	modal = async function(pageNameOrPath, autoClose) {
@@ -160,6 +169,7 @@ class D7Page {
 	mount = async (query, mountPoint) => {
 		await this._COMP.mount(query, mountPoint);
 		this._COMP._MOUNT_POINT.setAttribute('_d7page', this._COMP._PATH);
+		return this;
 	}
 }
 /*******************************
@@ -183,6 +193,7 @@ class D7Layout {
 
 	mount = async (query, mountPoint) => {
 		await this._COMP.mount(query, mountPoint);
+		return this;
 	}
 }
 /*******************************
