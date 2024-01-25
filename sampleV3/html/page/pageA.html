@@ -1,0 +1,77 @@
+<h2>{% _m.message %} Page A</h2>
+<div>
+    <span>IF sample:</span>
+    <div class="box" d7="if(_m.showBlock)">OK block</div>
+    <div class="box" d7="if(!_m.showBlock)">NG block</div>
+</div>
+<div>
+    <span>LOOP sample:</span>
+    <table>
+        <tr>
+            <th style="width:50px">ID</th>
+            <th style="width:200px">NAME</th>
+            <th style="width:50px">QTY</th>
+            <th style="width:50px">STATUS</th>
+        </tr>
+        <tr d7="for(var idx in _m.items) const item = _m.items[idx];" style="background-color: {% item.status === 'OK' ? '': 'gray' %}">
+            <td>{% item.id %}</td>
+            <td>{% item.name %}</td>
+            <td>{% item.qty %}</td>
+            <td>{% item.status %}</td>
+        </tr>
+    </table>
+</div>
+<div d7dummy>
+    this block will dropped when running.
+</div>
+<div style="display:flex; height: 150px;">
+    <span>Component sample:</span>
+    <div d7comp="compA?message=messageA">Load component A hear</div>
+    <div d7comp="/component/compB?message=messageB">Load component B hear</div>
+</div>
+
+<div id="section" style="display:flex">
+    <span>Render sample:</span>
+    <div class="box">{% _m.id %}</div>
+    <div class="box">{% _m.name %}</div>
+</div>
+
+<div style="margin-top: 10px; margin-left: 136px;">
+    <button onclick="d7.clickRender(e)">Render section</button>
+    <button onclick="d7.clickMessage(e)">Show messageBox</button>
+    <button onclick="d7.clickPage(e)">PageB transition</button>
+</div>
+
+<style>
+td {
+    text-align: center;
+}
+</style>
+
+<script>
+    await d7.init({
+        message: query.message,
+        showBlock: true,
+        items: [
+            {id:1, name:'apple', qty:100, status:'OK'},
+            {id:2, name:'pear', qty:110, status:'OK'},
+            {id:3, name:'quince', qty:200, status:'OK'},
+            {id:4, name:'peach', qty:130, status:'OK'},
+            {id:5, name:'plum', qty:190, status:'NG'},
+            {id:6, name:'apricot', qty:300, status:'OK'},
+        ],
+        id: 'id',
+        name: 'name',
+    });
+
+    d7.clickRender = function(e) {
+        d7.render('#section', {id:'0001', name:'Teddy'});
+    }
+    d7.clickPage = function(e) {
+        d7app.route('pageB');
+    }
+    d7.clickMessage = async function(e) {
+        const messageBox = await d7app.modal('messageBox');
+        messageBox.open({tital:'INFO', message:'this is how to show message box.'});
+    }
+</script>
