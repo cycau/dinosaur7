@@ -1,0 +1,28 @@
+.header {
+	width: 98vw;
+	height: 100px;
+	border: solid 1px;
+}
+.footer {
+	width: 98vw;
+	height: 100px;
+	border: solid 1px;
+}
+[d7page] {
+	width: 98vw;
+	height: calc(100vh - 250px);
+}
+.box {
+	min-width: 100px;
+	max-width: 200px;
+	margin: 10px;
+	border: solid 1px;
+	text-align: center;
+	background-color: chocolate;
+}
+[d7Comp] {
+	width: 300px;
+	height: 100px;
+	border: solid 2px red;
+	margin: 20px;
+}
