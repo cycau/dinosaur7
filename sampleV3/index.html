@@ -7,7 +7,7 @@
     <link rel="stylesheet" type="text/css" href="/sampleV3/dinosaur7.v3.min.css" />
     <script type="application/javascript" src="/sampleV3/dinosaur7.v3.min.js"></script>
   </head>
-  <body d7App >Here to show App</body>
+  <body d7App style="display:none;">Here to show App</body>
   <script type="application/javascript">
     d7App.setting({
       baseUrl: '/sampleV3/html',
@@ -16,8 +16,10 @@
       defaultExtension: '.html',
       route: [
         {name:'layoutA', url:'/base/layoutA', preload:true},
+        {name:'layoutB', url:'/base/layoutB', preload:true},
         {name:'pageA', url:'/page/pageA', preload:true},
         {name:'pageB', url:'/page/pageB', preload:true},
+        {name:'pageC', url:'/page/pageC', preload:true},
         {name:'compA', url:'/component/compA'},
         {name:'messageBox', url:'/component/messageBox'},
       ]
