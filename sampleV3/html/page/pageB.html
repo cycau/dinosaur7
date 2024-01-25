@@ -1,0 +1,79 @@
+<div d7layout="">/base/layoutB.html</div>
+
+<h2>{% _m.message %} Page B</h2>
+<div>
+    <span>IF sample:</span>
+    <div class="box" d7="if(!_m.showBlock)">OK block</div>
+    <div class="box" d7="if(_m.showBlock)">NG block</div>
+</div>
+<div>
+    <span>LOOP sample:</span>
+    <table>
+        <tr>
+            <th style="width:50px">ID</th>
+            <th style="width:200px">NAME</th>
+            <th style="width:50px">QTY</th>
+            <th style="width:50px">STATUS</th>
+        </tr>
+        <tr d7="for(var idx in _m.items) const item = _m.items[idx];" style="background-color: {% item.status === 'OK' ? '': 'gray' %}">
+            <td>{% item.id %}</td>
+            <td>{% item.name %}</td>
+            <td>{% item.qty %}</td>
+            <td>{% item.status %}</td>
+        </tr>
+    </table>
+</div>
+<div style="display:flex; height: 150px;">
+</div>
+
+<div id="section" style="display:flex">
+    <span>Render sample:</span>
+    <div class="box">{% _m.id %}</div>
+    <div class="box">{% _m.name %}</div>
+</div>
+
+<div style="margin-top: 10px; margin-left: 136px;">
+    <button onclick="d7.clickRender(e)">Render section</button>
+    <button onclick="d7.clickModal(e)">Open modal</button>
+    <button onclick="d7.clickPage(e)">PageA return</button>
+</div>
+
+<style>
+td {
+    text-align: center;
+}
+</style>
+
+<script>
+    await d7.init({
+        message: 'hello',
+        showBlock: true,
+        items: [
+            {id:91, name:'apple', qty:100, status:'OK'},
+            {id:92, name:'pear', qty:110, status:'OK'},
+            {id:93, name:'quince', qty:200, status:'NG'},
+            {id:94, name:'peach', qty:130, status:'NG'},
+            {id:95, name:'plum', qty:190, status:'OK'},
+            {id:96, name:'apricot', qty:300, status:'OK'},
+        ],
+        id: 'id',
+        name: 'name',
+    });
+
+    d7.clickRender = function(e) {
+        d7.render('#section', {id:'0002', name:'Iris'});
+    }
+    d7.clickPage = function(e) {
+        d7app.route('pageA', {message: 'return'});
+    }
+    d7.clickModal = async function(e) {
+        const modal = await d7app.modal('/component/compC', true);
+        modal.open(
+            {tital:'INFO', message:'this is how to show modal.'},
+            d7.modalResponse
+        );
+    }
+    d7.modalResponse = function(returnVal) {
+        alert('Responsed value is:' + returnVal);
+    }
+</script>
