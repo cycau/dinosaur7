@@ -2,18 +2,25 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>dinosaur7</title>
-    <script type="application/javascript" src="/test/dinosaur7.js"></script>
+    <title>Dinosaur7 Sample</title>
+    <link rel="stylesheet" type="text/css" href="/sampleV3/dinosaur7.v3.css" />
+    <link rel="stylesheet" type="text/css" href="/sampleV3/sample.css" />
+    <script type="application/javascript" src="/sampleV3/dinosaur7.v3.js"></script>
   </head>
-  <style>
-    .text1 {
-      color : red;
-    }
-  </style>
-  <body d7App >index page</body>
+  <body d7App >Here to show App</body>
   <script type="application/javascript">
     d7App.setting({
-      topPage: '/test/page/pageA.html',
+      baseUrl: '/sampleV3/html',
+      topPage: 'pageA?message=hello',
+      defaultLayout: 'layoutA',
+      defaultExtension: '.html',
+      route: [
+        {name:'layoutA', url:'/base/layoutA', preload:true},
+        {name:'pageA', url:'/page/pageA', preload:true},
+        {name:'pageB', url:'/page/pageB', preload:true},
+        {name:'compA', url:'/component/compA'},
+        {name:'messageBox', url:'/component/messageBox'},
+      ]
     });
   </script>
 </html>
