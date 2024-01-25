@@ -1,0 +1,16 @@
+<h3>Component C show as modal</h3>
+<div style="width: 400px; height:150px;">
+    <h5>{% _m.tital %}</h5>
+    <span>{% _m.message %}</span>
+
+    <div style="margin-top: 40px; margin-left: 330px;">
+        <button onclick="d7.clickOK()">OK</button>
+    </div>    
+</div>
+
+<script>
+    d7.init(query);
+    d7.clickOK = function() {
+        d7.close('Modal OK');
+    }
+</script>
