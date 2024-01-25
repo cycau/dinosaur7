@@ -269,8 +269,8 @@ class D7Component {
 			d7debug(`Running UserScript. d7${this.id} ${this._PATH}`);
 			await this._TEMPLATE.fnUserScript.call(this, query, this);
 		} else {
-			d7debug(`Running d7.init({}) instead of UserScript. d7${this.id} ${this._PATH}`);
-			await d7.init({})
+			d7debug(`No UserScript defined. d7${this.id} ${this._PATH}`);
+			await this.init({})
 		}
 
 		if (this.afterInit) this.afterInit(this);
