@@ -55,8 +55,7 @@ class D7App {
 			const pageInfo = D7Util.parseUrl(row.url);
 			_D7_ROUTE_MAP[pageId] = {
 				name: row.name,
-				path: pageInfo.path,
-				query: pageInfo.query,
+				path: D7Util.parseUrl(row.url).path,
 				description: row.description,
 			};
 			if (!row.preload) continue;
@@ -133,8 +132,10 @@ const d7parseUrl = (nameOrUrl) => {
 	nameOrUrl = nameOrUrl.trim();
 	if (nameOrUrl.startsWith('/')) return D7Util.parseUrl(nameOrUrl);
 
-	const pageInfo = _D7_ROUTE_MAP[nameOrUrl.toUpperCase()];
-	if (!pageInfo) d7error(`setting.route not defined. ${nameOrUrl}`);
+	const pageInfo = D7Util.parseUrl('/' + nameOrUrl);
+	const routeInfo = _D7_ROUTE_MAP[pageInfo.path.substring(1).toUpperCase()];
+	if (!routeInfo) d7error(`setting.route not defined. ${nameOrUrl}`);
+	pageInfo.path = routeInfo.path;
 	return pageInfo;
 }
 /*******************************
@@ -174,7 +175,7 @@ class D7Layout {
 		let d7Layout = _D7_CACHE_LAYOUT[path];
 		if (d7Layout) return d7Layout;
 
-		const comp = await D7Component.load(path);
+		const comp = await D7Component.load(path, '-BAN-');
 		d7Layout = new D7Layout(comp);
 		_D7_CACHE_LAYOUT[path] = d7Layout;
 		return d7Layout;
@@ -203,8 +204,14 @@ class D7Modal {
 		const comp = await D7Component.load(path);
 		const d7Modal = new D7Modal(comp);
 
-		comp.close = () => { d7Modal.close(); }
-		if (autoClose)  d7Modal.container.onclick = function() {d7Modal.close();};
+		comp.close = (returnVals) => { 
+			d7Modal.close(); 
+			if (comp.callParent) comp.callParent(returnVals);
+		}
+		if (autoClose)  d7Modal.container.onclick = function() {
+			d7Modal.close();
+			if (comp.callParent) comp.callParent();
+		};
 		else 			d7Modal.container.onclick = function() {};
 
 		return d7Modal;
@@ -299,7 +306,7 @@ class D7Component {
 	}
 
 	mountLayout = async function(modelData) {
-		if (typeof this._DEFAULT_LAYOUT_URL === 'undefined') return this._MOUNT_POINT;
+		if (this._DEFAULT_LAYOUT_URL === '-BAN-') return this._MOUNT_POINT;
 
 		const layoutUrl = this._TEMPLATE.getLayoutUrl(modelData) || this._DEFAULT_LAYOUT_URL;
 		const currLayoutUrl = this._MOUNT_LAYOUT.getAttribute('_d7layout');
@@ -410,8 +417,8 @@ class D7Template {
 			this.fnUserScript = new AsyncFunction("query", "d7", scriptCode);
 		}
 		this.fnBindEvent = function(targetDom, d7Owner) {
-			targetDom.querySelectorAll("[d7event]").forEach(function(ele) {
-				const expr = ele.getAttribute("d7event");
+			targetDom.querySelectorAll("[_d7event]").forEach(function(ele) {
+				const expr = ele.getAttribute("_d7event");
 				const pos = expr.indexOf(',');
 				if (pos < 1) return;
 				const eventName = expr.substring(0, pos).trim();
@@ -419,6 +426,7 @@ class D7Template {
 				//const eventFunc = function(e) {const d7=d7Owner; eval(eventLogic);}
 				const eventFunc = function(e) {new Function("e", "d7", eventLogic)(e, d7Owner);}
 				ele.addEventListener(eventName, eventFunc);
+				//ele.removeAttribute("_d7event");
 			});
 		};
 
@@ -462,13 +470,13 @@ class D7Template {
 /*******************************
  * COMPILER
  *******************************/
-const _D7_LOGIC = {	// {% logic %}				describe logic
+const _D7_LOGIC = {	// {[% logic %]}			describe logic
+	start: "{[%",
+	close: "%]}",
+}
+const _D7_PRINT = {	// {% output %}				describe output
 	start: "{%",
 	close: "%}",
-}
-const _D7_PRINT = {	// [% output %]				describe output
-	start: "[%",
-	close: "%]",
 }
 const _D7_HTMLENCODE = {
 	"<": "&lt;", 
@@ -524,7 +532,7 @@ const d7analyze = function(htmlText) {
 	// {% xxx %} normalize to <!-- {% xxx %} -->
 	htmlText = htmlText.replace(_D7_NL_REG_START, function (m, cmtStart, start) {return "<!-- " + start;})
 	htmlText = htmlText.replace(_D7_NL_REG_CLOSE, function (m, close, cmtClose) {return close + " -->";})
-	htmlText = htmlText.replace(_D7_NL_REG_EVENT, function (m, eventName, quot) {return ' d7event=' + quot + eventName.substring(2) + ',';})
+	htmlText = htmlText.replace(_D7_NL_REG_EVENT, function (m, eventName, quot) {return ' _d7event=' + quot + eventName.substring(2) + ',';})
 	divTemp.innerHTML = htmlText;
 	var layoutExpr = "";
 	var scriptCode = "";
@@ -606,7 +614,7 @@ const d7prepareHtml = function(targetDom) {
 				d7Tag.before(logicKey);
 				return;
 			}
-			logicPool[logicKey] = `${_D7_LOGIC.start} ${logic.startsWith('{') ? d7expr : `${control}{${logic}`}; ${_D7_LOGIC.close}`;
+			logicPool[logicKey] = `${_D7_LOGIC.start} ${logic.startsWith('{') ? d7expr : `${control}{${logic}`} ${_D7_LOGIC.close}`;
 			d7Tag.before(logicKey);
 			logicKey = `${prefix}${++idx}E`;
 			logicPool[logicKey] = `${_D7_LOGIC.start} } ${_D7_LOGIC.close}`;
@@ -614,7 +622,7 @@ const d7prepareHtml = function(targetDom) {
 			return;
 		}
 		if (ctl === 'for') {
-			logicPool[logicKey] = `${_D7_LOGIC.start} ${logic.startsWith('{') ? d7expr : `${control}{${logic}`}; ${_D7_LOGIC.close}`;
+			logicPool[logicKey] = `${_D7_LOGIC.start} ${logic.startsWith('{') ? d7expr : `${control}{${logic}`} ${_D7_LOGIC.close}`;
 			d7Tag.before(logicKey);
 			logicKey = `${prefix}${++idx}E`;
 			logicPool[logicKey] = `${_D7_LOGIC.start} } ${_D7_LOGIC.close}`;
@@ -660,6 +668,7 @@ const d7compileHtml = function(expr) {
 
 	expr = expr.replace(/[\r\n]/g, "").replace(/'/g, "\\'");
 	var tpl = expr.replace(_D7_RL_REG, function (m, start, expr, close) {
+		expr = expr.replace(/\\'/g, "'");
 		if (expr.startsWith("=")) {
 			return `' + (${expr.substring(1)}) +'`;
 		}
