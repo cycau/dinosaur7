@@ -33,7 +33,7 @@ class D7App {
 	constructor() {
 		this._GLOBAL = {};
 		this._MOUNT_POINT = null;
-		this._HIST_PAGE = {};
+		this._PAGE_PREV_STATUS = {};
 	}
 
 	setting = function(opt) {
@@ -54,8 +54,12 @@ class D7App {
 			};
 		}
 
-		this.topPageInfo = d7parseUrl(opt.topPage || window.location.href);
-		history.replaceState('', '', this.topPageInfo.path);
+		let entryUrl = opt.topPage;
+		if (window.location.pathname !== '/') entryUrl = window.location.href;
+		if (opt.topPageStart) entryUrl = opt.topPage;
+
+		this._entryPage = d7parseUrl(entryUrl);
+		history.replaceState({ path: this._entryPage.path, query: this._entryPage.query}, 'tital', D7Util.stringifyUrl(this._entryPage.path, this._entryPage.query));
 	}
 
 	// on document load
@@ -65,44 +69,40 @@ class D7App {
 			await D7Template.load(_D7_ROUTE_MAP[key].path);
 		}
 
-		if ((_D7_BASE_URL + this.topPageInfo.path) === window.location.pathname) d7error('Not specified topPage or d7page.');
-
 		this._MOUNT_POINT = document.querySelector('[d7App]');
 		if (!this._MOUNT_POINT) d7error('no [d7App] defined in root html.');
-		this.route(this.topPageInfo.path, this.topPageInfo.query);
+		this.route(this._entryPage.path, this._entryPage.query, false, true);
 
 		window.onpopstate = (e) => {
 			if (!e.state?.path) return;
-
-			const histPage = this._HIST_PAGE[e.state.path];
-			if (!histPage) return;
-			this._MOUNT_POINT.replaceWith(histPage);
-			this._MOUNT_POINT = document.querySelector('[d7App]');
+			this.route(e.state.path, e.state.query, false, true);
 		};
 	}
 
-	route = async function(pageNameOrUrl, params, prevStatus) {
+	route = async function(pageNameOrUrl, params, prevStatus, skipHist) {
 		const pageInfo = d7parseUrl(pageNameOrUrl);
-		history.pushState({ path: pageInfo.path }, "title", pageInfo.path);
+		if (!skipHist) history.pushState({ path: pageInfo.path, query: {...pageInfo.query, ...params}}, 'title', D7Util.stringifyUrl(pageInfo.path, {...pageInfo.query, ...params}));
 
-		if (prevStatus && this._HIST_PAGE[pageInfo.path]) {
+		if (prevStatus && this._PAGE_PREV_STATUS[pageInfo.path]) {
 			this._MOUNT_POINT.replaceWith(this._HIST_PAGE[pageInfo.path]);
 			this._MOUNT_POINT = document.querySelector('[d7App]');
 
-			this._HIST_PAGE[pageInfo.path] = this._MOUNT_POINT;
+			this._PAGE_PREV_STATUS[pageInfo.path] = this._MOUNT_POINT;
 			return;
 		}
 
+		// for saving prev status
 		const mountPoint = this._MOUNT_POINT.cloneNode(true);
 		const pageTag = mountPoint.querySelector('[d7page]');
 		if (pageTag) pageTag.innerHTML = ''; // hold layout
 		else mountPoint.innerHTML = '';
+
 		this._MOUNT_POINT.replaceWith(mountPoint);
 		this._MOUNT_POINT = mountPoint;
 
 		const d7Page = await D7Page.load(pageInfo.path);
 		await d7Page.mount({...pageInfo.query, ...params}, this._MOUNT_POINT);
-		this._HIST_PAGE[pageInfo.path] = this._MOUNT_POINT;
+		this._PAGE_PREV_STATUS[pageInfo.path] = this._MOUNT_POINT;
 	}
 
 	modal = async function(pageNameOrPath, autoClose) {
@@ -139,7 +139,7 @@ class D7App {
 
 const d7parseUrl = (nameOrUrl) => {
 	nameOrUrl = nameOrUrl.trim();
-	if (nameOrUrl.startsWith('/')) return D7Util.parseUrl(nameOrUrl);
+	if (nameOrUrl.startsWith('/') || nameOrUrl.startsWith('http')) return D7Util.parseUrl(nameOrUrl);
 
 	const pageInfo = D7Util.parseUrl('/' + nameOrUrl);
 	const routeInfo = _D7_ROUTE_MAP[pageInfo.path.substring(1).toUpperCase()];
@@ -742,6 +742,7 @@ class D7Api {
 		return new Promise((resolve, reject) => {
 			let request = new XMLHttpRequest();
 			request.open('GET', htmlUrl);
+			request.setRequestHeader('d7req', 'html');
 	
 			request.onload = function() {
 				if (request.status == 200) {
@@ -759,6 +760,7 @@ class D7Api {
 	static loadHtmlSync = (htmlUrl) => {
 		let request = new XMLHttpRequest();
 		request.open('GET', htmlUrl, false);
+		request.setRequestHeader('d7req', 'html');
 		request.send();
 
 		if (request.status == 200) return request.responseText;
@@ -793,7 +795,7 @@ class D7Api {
 			}
 			request.open("GET", url);
 			for (var key in headers) {
-				xhr.setRequestHeader(key, headers[key]);
+				request.setRequestHeader(key, headers[key]);
 			}
 			request.send();
 		});
@@ -826,7 +828,7 @@ class D7Api {
 			request.open("POST", url);
 			if (!headers["Content-Type"]) headers["Content-Type"] = "application/json; charset=utf-8";
 			for (var key in options.headers) {
-				xhr.setRequestHeader(key, headers[key]);
+				request.setRequestHeader(key, headers[key]);
 			}
 			if (headers["Content-Type"].toUpperCase().contains('JSON')) return request.send(JSON.stringify(data));
 			request.send(data);
@@ -860,7 +862,7 @@ class D7Api {
 			request.open("PUT", url);
 			if (!headers["Content-Type"]) headers["Content-Type"] = "application/json; charset=utf-8";
 			for (var key in options.headers) {
-				xhr.setRequestHeader(key, headers[key]);
+				request.setRequestHeader(key, headers[key]);
 			}
 			if (headers["Content-Type"].toUpperCase().contains('JSON')) return request.send(JSON.stringify(data));
 			request.send(data);
@@ -894,7 +896,7 @@ class D7Api {
 			}
 			request.open("DELETE", url);
 			for (var key in headers) {
-				xhr.setRequestHeader(key, headers[key]);
+				request.setRequestHeader(key, headers[key]);
 			}
 			request.send();
 		});
