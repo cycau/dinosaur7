@@ -10,7 +10,9 @@ import org.springframework.web.bind.annotation.RestController;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
@@ -65,7 +67,16 @@ public class ApiController {
                 throw new RuntimeException(e);
             }
         } else {
-        	request.put("data", new String(req.getInputStream().readAllBytes()));
+        	InputStreamReader stream = new InputStreamReader(req.getInputStream());
+        	BufferedReader reader = new BufferedReader(stream);
+        	String line;
+        	StringBuilder result = new StringBuilder();
+        	while((line = reader.readLine()) != null) {
+        	    result.append(line);
+        	}
+        	request.put("data", result.toString());
+        	reader.close();
+        	stream.close();
         }
 
         request.put("header", header);
