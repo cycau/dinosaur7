@@ -14,7 +14,7 @@ public class ViewController {
 
 	@RequestMapping("/")
     public String home() {
-    	if (resourceIndex.isBlank()) {
+    	if (resourceIndex.isEmpty()) {
     		return "d7mod/dinosaur7.html";
     	}
         return resourceIndex;
