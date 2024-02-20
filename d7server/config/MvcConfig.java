@@ -25,12 +25,14 @@ public class MvcConfig implements WebMvcConfigurer {
 
   @Override
   public void addResourceHandlers(ResourceHandlerRegistry registry) {
+	  resourceRoot = resourceRoot.trim();
+	  resourceRoot = resourceIndex.trim();
 	  registry
-	  	.addResourceHandler("/**")
+		.addResourceHandler("/**")
 		.addResourceLocations("classpath:/public/")
 		.setCachePeriod(60*60*24)
 		.resourceChain(true)
-		.addResolver(resourceRoot.isBlank() ? new SysResourceResolver() : new ExternalResourceResolver(resourceRoot));
+		.addResolver(resourceRoot.isEmpty() ? new SysResourceResolver() : new ExternalResourceResolver(resourceRoot));
   }
 
   public class SysResourceResolver extends PathResourceResolver {
@@ -59,7 +61,7 @@ public class MvcConfig implements WebMvcConfigurer {
           return super.getResource(currPath + fileName, location);
       }
 
-      if (!resourceIndex.isBlank()) {
+      if (!resourceIndex.isEmpty()) {
           return super.getResource(resourceIndex, location);
       }
 
@@ -108,7 +110,7 @@ public class MvcConfig implements WebMvcConfigurer {
           return new ClassPathResource(currPath + fileName, this.exResourceLoader);
       }
 
-      if (!resourceIndex.isBlank()) {
+      if (!resourceIndex.isEmpty()) {
           Resource resource = new ClassPathResource(resourceIndex, this.exResourceLoader);
           if (resource.isReadable()) return resource;
 
