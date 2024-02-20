@@ -32,7 +32,7 @@ public class MockData {
     private ClassLoader exClassLoader;
     @PostConstruct
     private void init() throws MalformedURLException {
-    	if (!resourceRoot.isBlank())
+    	if (resourceRoot != null && !resourceRoot.trim().isEmpty())
     	exClassLoader = new URLClassLoader(new URL[]{new File(resourceRoot).toURI().toURL()});
     }
 
