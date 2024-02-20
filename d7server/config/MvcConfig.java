@@ -1,6 +1,9 @@
 package com.cycau.d7server.config;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.BufferedReader;
 import java.io.File;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -22,11 +25,12 @@ public class MvcConfig implements WebMvcConfigurer {
 
   @Override
   public void addResourceHandlers(ResourceHandlerRegistry registry) {
-    registry.addResourceHandler("/**")
-            .addResourceLocations("classpath:/public/")
-            .setCachePeriod(60*60*24)
-            .resourceChain(true)
-            .addResolver(resourceRoot.isBlank() ? new SysResourceResolver() : new D7ResourceResolver(resourceRoot));
+	  registry
+	  	.addResourceHandler("/**")
+		.addResourceLocations("classpath:/public/")
+		.setCachePeriod(60*60*24)
+		.resourceChain(true)
+		.addResolver(resourceRoot.isBlank() ? new SysResourceResolver() : new ExternalResourceResolver(resourceRoot));
   }
 
   public class SysResourceResolver extends PathResourceResolver {
@@ -34,45 +38,85 @@ public class MvcConfig implements WebMvcConfigurer {
     protected Resource getResource(String resourcePath, Resource location) throws IOException {
       if (resourcePath.indexOf(".") > 0) return super.getResource(resourcePath, location);
 
-      Resource resource = super.getResource(resourceIndex, location);
-      if (resource != null) return resource;
-      resource = super.getResource("index.html", location);
-      if (resource != null) return resource;
-      resource = super.getResource("index.jsp", location);
-      return resource;
+      if (resourcePath.endsWith("index")) {
+    	  String currPath = resourcePath.substring(0, resourcePath.lastIndexOf("index"));
+          InputStream is = Thread.currentThread().getContextClassLoader().getResourceAsStream("public/" + currPath);
+          if (is == null) is = ClassLoader.getSystemClassLoader().getResourceAsStream(currPath);
+          if (is == null) {
+        	  System.out.println("[ERROR] Not found folder. resources/public/" + currPath);
+        	  return null;
+          }
+
+          BufferedReader br = new BufferedReader(new InputStreamReader(is));
+          String fileName = null;
+          while ((fileName = br.readLine()) != null) {
+        	  if (fileName.startsWith("index.")) break;
+          }
+          br.close();
+          is.close();
+
+          if (fileName == null) return null;
+          return super.getResource(currPath + fileName, location);
+      }
+
+      if (!resourceIndex.isBlank()) {
+          return super.getResource(resourceIndex, location);
+      }
+
+      return super.getResource("d7mod/dinosaur7.html", location);
     }
   }
 
-  public class D7ResourceResolver extends PathResourceResolver {
-    private URLClassLoader d7ResourceLoader;
+  public class ExternalResourceResolver extends PathResourceResolver {
+    private URLClassLoader exResourceLoader;
 
-    public D7ResourceResolver(String resourceRoot) {
+    public ExternalResourceResolver(String resourceRoot) {
       try {
-        d7ResourceLoader = new URLClassLoader(new URL[]{new File(resourceRoot).toURI().toURL()});
+        exResourceLoader = new URLClassLoader(new URL[]{new File(resourceRoot).toURI().toURL()});
       } catch (Exception e) {
         e.printStackTrace();
-        throw new RuntimeException(e);
+        throw new RuntimeException("[ERROR] when loading external resource.");
       }
     }
 
     @Override
     protected Resource getResource(String resourcePath, Resource location) throws IOException {
       if (resourcePath.indexOf(".") > 0) {
-        Resource resource = new ClassPathResource(resourcePath, this.d7ResourceLoader);
+        Resource resource = new ClassPathResource(resourcePath, this.exResourceLoader);
         if (resource.isReadable()) return resource;
+
         return super.getResource(resourcePath, location);
       }
 
-      Resource resource = new ClassPathResource(resourceIndex, this.d7ResourceLoader);
-      if (resource.isReadable()) return resource;
-      resource = super.getResource(resourceIndex, location);
-      if (resource != null) return resource;
+      if (resourcePath.endsWith("index")) {
+    	  String currPath = resourcePath.substring(0, resourcePath.lastIndexOf("index"));
+          InputStream is = this.exResourceLoader.getResourceAsStream(currPath);
+          if (is == null) {
+        	  System.out.println("[ERROR] Not found folder. " + currPath);
+        	  return null;
+          }
 
-      resource = new ClassPathResource("index.html", this.d7ResourceLoader);
-      if (resource.isReadable()) return resource;
-      resource = new ClassPathResource("index.jsp", this.d7ResourceLoader);
-      if (resource.isReadable()) return resource;
-      return null;
+          BufferedReader br = new BufferedReader(new InputStreamReader(is));
+          String fileName = null;
+          while ((fileName = br.readLine()) != null) {
+        	  if (fileName.startsWith("index.")) break;
+          }
+          br.close();
+          is.close();
+
+          if (fileName == null) return null;
+          return new ClassPathResource(currPath + fileName, this.exResourceLoader);
+      }
+
+      if (!resourceIndex.isBlank()) {
+          Resource resource = new ClassPathResource(resourceIndex, this.exResourceLoader);
+          if (resource.isReadable()) return resource;
+
+    	  System.out.println("[ERROR] Not found app Index. " + resourceIndex);
+          return null;
+      }
+
+      return super.getResource("d7mod/dinosaur7.html", location);
     }
   }
 }
