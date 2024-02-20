@@ -1,38 +1,65 @@
 package com.cycau.d7server.controller;
 
 import java.util.Map;
+import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
-import java.util.Enumeration;
-import java.util.HashMap;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.List;
 import java.util.ArrayList;
 
-import org.springframework.core.io.DefaultResourceLoader;
-import org.springframework.core.io.Resource;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.yaml.snakeyaml.Yaml;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import javax.annotation.PostConstruct;
 
-import jakarta.servlet.http.HttpServletRequest;
-
+@Component
 public class MockData {
-    private MockData() {}
+    @Value("${d7server.devmode}")
+    private boolean devmode;
+    @Value("${d7server.resource.root}")
+    private String resourceRoot;
+
+    private ClassLoader exClassLoader;
+    @PostConstruct
+    private void init() throws MalformedURLException {
+    	if (!resourceRoot.isBlank())
+    	exClassLoader = new URLClassLoader(new URL[]{new File(resourceRoot).toURI().toURL()});
+    }
 
     @SuppressWarnings("unchecked")
-    public static ResponseEntity<Object> getResponse(HttpServletRequest req) {
-        Map<String, Object> request = extractRequest(req);
+    public ResponseEntity<Object> getResponse(String method, String uri, Map<String, Object> httpRequest) throws IOException {
+    	method = method.toUpperCase();
+        uri = uri.endsWith("/")?uri.substring(0, uri.length()-1):uri;
 
-        for (Map<String, Object> mock : getMocks(req.getMethod().toUpperCase(), req.getRequestURI())) {
+        for (Map<String, Object> mock : collectMockData(method, uri)) {
             Map<String, Object> mcReq = (Map<String, Object>)mock.get("request");
-            if (!equals(mcReq.get("uri"), request.get("uri"))) continue;
-            if (!equals(mcReq.get("header"), request.get("header"))) continue;
-            if (!equals(mcReq.get("query"), request.get("query"))) continue;
-            if (!equals(mcReq.get("data"), request.get("data"))) continue;
+            if (!equals(mcReq.get("uri"), uri)) {
+            	System.out.println("[INFO] Not matched with Uri. " + mock.get("mock_name"));
+            	continue;
+            }
+            if (!equals(mcReq.get("query"), httpRequest.get("query"))) {
+            	System.out.println("[INFO] Not matched with Query. " + mock.get("mock_name"));
+            	continue;
+            }
+            if (!equals(mcReq.get("headers"), httpRequest.get("headers"))) {
+            	System.out.println("[INFO] Not matched with Headers. " + mock.get("mock_name"));
+            	continue;
+            }
+            if (!equals(mcReq.get("data"), httpRequest.get("data"))) {
+            	System.out.println("[INFO] Not matched with Data. " + mock.get("mock_name"));
+            	continue;
+            }
+        	System.out.println("[INFO] Matched! with " + mock.get("mock_name"));
 
             HttpStatus status = HttpStatus.OK;
             Map<String, Object> mcResp = (Map<String, Object>)mock.get("response");
@@ -53,92 +80,77 @@ public class MockData {
         return new ResponseEntity<>("Not found mock data.", HttpStatus.NOT_FOUND);
     }
 
-    private static List<Map<String, Object>> getMocks(String method, String uri) {
-        List<Map<String, Object>> mocks = new ArrayList<>();
-        DefaultResourceLoader resourceLoader = new DefaultResourceLoader();
-        Yaml yaml = new Yaml();
-        try {
-            for (String mockName : getResourceFiles(method, uri)) {
-                Resource resource = resourceLoader.getResource(mockName);
-                java.io.InputStream is = resource.getInputStream();
-                java.io.InputStreamReader reader = new java.io.InputStreamReader(is);
-                mocks.add((Map<String, Object>) yaml.load(reader));
-                reader.close();
-                is.close();
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            throw new RuntimeException(e);
+    private List<Map<String, Object>> collectMockData(String method, String uri) throws IOException {
+    	List<Map<String, Object>> mocks = new ArrayList<>();
+        uri = uri.startsWith("/")?uri.substring(1):uri;
+        
+        InputStream is = null;
+    	String resourcePath = null;
+        ClassLoader classLoader = exClassLoader;
+        if (classLoader != null) {
+            resourcePath = uri;
+        	is = classLoader.getResourceAsStream(resourcePath);
         }
+        if (is == null) {
+        	resourcePath = "public/" + uri;
+            classLoader = Thread.currentThread().getContextClassLoader();
+        	is = classLoader.getResourceAsStream(resourcePath);
+        }
+        if (is == null) {
+        	resourcePath = uri;
+            classLoader = ClassLoader.getSystemClassLoader();
+        	is = classLoader.getResourceAsStream(resourcePath);
+        }
+
+        if (is == null) {
+        	System.out.println("[ERROR] Not found mock path. /" + uri);
+        	return mocks;
+        }
+        BufferedReader br = new BufferedReader(new InputStreamReader(is));
+
+        String fileName;
+        Yaml yaml = new Yaml();
+        while ((fileName = br.readLine()) != null) {
+            if (!fileName.startsWith(method)) continue;
+            if (!fileName.endsWith(".yml")) continue;
+
+            InputStream fileStream = classLoader.getResourceAsStream(resourcePath + "/" + fileName);
+            InputStreamReader fileReader = new java.io.InputStreamReader(fileStream);
+            try {
+            	Map<String, Object> mockData = yaml.load(fileReader);
+            	mockData.put("mock_name", resourcePath + "/" + fileName);
+                mocks.add(mockData);
+            } catch (Exception ex) {
+                System.out.println("[ERROR] Wrong yaml format. " + resourcePath + "/" + fileName);
+            }
+            fileReader.close();
+            fileStream.close();
+        }
+        is.close();
+        br.close();
+
+        if (mocks.size() < 1)
+        System.out.println("[ERROR] Not found mock file. " + uri + "/" + method + "...yml");
+    
         return mocks;
     }
 
-    private static List<String> getResourceFiles(String prefix, String uri) throws IOException {
-        if (uri.endsWith("/")) uri = uri.substring(0, uri.length()-1);
-        String resourcePath = "public" + uri + (uri.endsWith("/")?"":"/");
-        List<String> filenames = new ArrayList<>();
-        java.io.InputStream is = Thread.currentThread().getContextClassLoader().getResourceAsStream(resourcePath);
-        if (is == null) is = ClassLoader.getSystemClassLoader().getResourceAsStream(resourcePath);
-        
-        java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(is));
-
-        String fileName;
-        while ((fileName = br.readLine()) != null) {
-            if (!fileName.startsWith(prefix)) continue;
-            if (!fileName.endsWith(".yml")) continue;
-            filenames.add(resourcePath + fileName);
-        }
-    
-        return filenames;
-    }
-
-    private static Map<String, Object> extractRequest(HttpServletRequest req) {
-        Map<String, Object> request = new HashMap<>();
-        Map<String, Object> header = new HashMap<>();
-        Map<String, Object> parameter = new HashMap<>();
-
-        Enumeration<String> headerNames = req.getHeaderNames();
-        while (headerNames.hasMoreElements()) {
-            String name = headerNames.nextElement();
-            header.put(name, req.getHeader(name));
-        }
-        Enumeration<String> queryNames = req.getParameterNames();
-        while (queryNames.hasMoreElements()) {
-            String name = queryNames.nextElement();
-            parameter.put(name, req.getParameter(name));
-        }
-        if (((String)header.getOrDefault("Content-Type", "")).contains("json")) {
-            ObjectMapper mapper = new ObjectMapper();
-            try {
-                Map<String, Object> data = mapper.readValue(req.getInputStream(), new TypeReference<Map<String, Object>>(){});
-                request.put("data", data);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        request.put("uri", req.getRequestURI());
-        request.put("header", header);
-        request.put("query", parameter);
-        request.put("parameter", parameter);
-        return request;
-    }
-
-    private static boolean equals(Object mock, Object req) {
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+	private static boolean equals(Object mock, Object httpReq) {
         if (mock == null) return true;
-        if (req == null) return false;
+        if (httpReq == null) return false;
 
-        if (mock instanceof String) mock.equals(req);
+        if (mock instanceof String) mock.equals(httpReq);
         if (mock instanceof Map) {
-            if (!(req instanceof Map)) return false;
-            return compareMap((Map)mock, (Map)req);
+            if (!(httpReq instanceof Map)) return false;
+            return compareMap((Map)mock, (Map)httpReq);
         }
         if (mock instanceof List) {
-            if (!(req instanceof List)) return false;
-            return compareList((List)mock, (List)req);
+            if (!(httpReq instanceof List)) return false;
+            return compareList((List)mock, (List)httpReq);
         }
 
-        return mock.toString().equals(req.toString());
+        return mock.toString().equals(httpReq.toString());
     }
     private static boolean compareMap(Map<String, Object> mock, Map<String, Object> req) {
         if (mock.size() > req.size()) return false;
