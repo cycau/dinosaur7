@@ -428,16 +428,26 @@ class D7Template {
 			this.fnUserScript = new AsyncFunction("query", "d7", scriptCode);
 		}
 		this.fnBindEvent = function(targetDom, d7Owner) {
-			targetDom.querySelectorAll("[_d7event]").forEach(function(ele) {
-				const expr = ele.getAttribute("_d7event");
-				const pos = expr.indexOf(',');
-				if (pos < 1) return;
-				const eventName = expr.substring(0, pos).trim();
-				const eventLogic = expr.substring(pos+1).trim();
-				//const eventFunc = function(e) {const d7=d7Owner; eval(eventLogic);}
-				const eventFunc = function(e) {new Function("e", "d7", eventLogic)(e, d7Owner);}
-				ele.addEventListener(eventName, eventFunc);
-				//ele.removeAttribute("_d7event");
+			targetDom.querySelectorAll("[_d7bind]").forEach(function(ele) {
+				for (let idx=0; idx<ele.attributes.length;idx++) {
+					let node = ele.attributes[idx];
+					if (!node.name?.startsWith('_d7event')) continue;
+					const expr = node.value;
+					const pos = expr.indexOf(',');
+					if (pos < 1) continue;
+
+					const eventName = expr.substring(0, pos).trim();
+					const eventLogic = expr.substring(pos+1).trim();
+					const eventFunc = function(e) {new Function("e", "d7", eventLogic)(e, d7Owner);}
+					if (eventName === 'init') {
+						try {eventFunc(null);}
+						catch(ex) {d7error('Maybe caused by { ' + eventLogic + ' } defined after d7.init(). ');}
+					} else {
+						ele.addEventListener(eventName, eventFunc);
+					}
+					//ele.removeAttribute(node.name);
+				}
+				ele.removeAttribute("_d7bind");
 			});
 		};
 
@@ -533,17 +543,18 @@ const d7escapeReg = function(str) {
  *******************************/
 const _D7_NL_REG_START = new RegExp(`(<!\\-\\-\\s*)?(${d7escapeReg(_D7_LOGIC.start)})`, 'gm');
 const _D7_NL_REG_CLOSE = new RegExp(`(${d7escapeReg(_D7_LOGIC.close)})(\\s*\\-\\->)?`, 'gm');
-const _D7_NL_REG_EVENT = new RegExp(`\\s(onclick|ondblclick|onmousedown|onmouseup|onmouseover|onmousemove|onmouseout|onkeypress|onkeydown|onkeyup|onload|onunload|onfocus|onblur|onsubmit|onreset|onselect|onchange)=("|')`, 'igm');
+const _D7_NL_REG_EVENT = new RegExp(`\\s(oninit|onclick|ondblclick|onmousedown|onmouseup|onmouseover|onmousemove|onmouseout|onkeypress|onkeydown|onkeyup|onload|onunload|onfocus|onblur|onsubmit|onreset|onselect|onchange)=("|')`, 'igm');
 const d7analyze = function(htmlText) {
 	let firstTag = htmlText.match(/<\w+>/)
 	if (firstTag) firstTag = firstTag[0]
 	else firstTag = 'div'
 	var divTemp = d7makeContainer(firstTag);
 
+	let bindIdx=0;
 	// {% xxx %} normalize to <!-- {% xxx %} -->
 	htmlText = htmlText.replace(_D7_NL_REG_START, function (m, cmtStart, start) {return "<!-- " + start;})
 	htmlText = htmlText.replace(_D7_NL_REG_CLOSE, function (m, close, cmtClose) {return close + " -->";})
-	htmlText = htmlText.replace(_D7_NL_REG_EVENT, function (m, eventName, quot) {return ' _d7event=' + quot + eventName.substring(2) + ',';})
+	htmlText = htmlText.replace(_D7_NL_REG_EVENT, function (m, eventName, quot) {return ' _d7bind _d7event' + bindIdx++ + '=' + quot + eventName.substring(2) + ',';})
 	divTemp.innerHTML = htmlText;
 	var layoutExpr = "";
 	var scriptCode = "";
