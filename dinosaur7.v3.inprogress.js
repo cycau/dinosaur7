@@ -25,9 +25,9 @@
  ******************************************/
 
 let _D7_DEV_MODE = 'dev'; 
-let _D7_BASE_URL = '';
+let _D7_BASE_URI = '';
 let _D7_DEFAULT_LAYOUT = '';
-let _D7_DEFAULT_EXTENSION = '';
+let _D7_DEFAULT_EXTENSION = '.html';
 let _D7_ROUTE_MAP = {};
 class D7App {
 	constructor() {
@@ -40,7 +40,7 @@ class D7App {
 		if (!opt) opt = {};
 
 		_D7_DEV_MODE = opt.devMode || _D7_DEV_MODE;
-		_D7_BASE_URL = opt.baseUrl || _D7_BASE_URL;
+		_D7_BASE_URI = opt.baseUri || _D7_BASE_URI;
 		_D7_DEFAULT_LAYOUT = opt.defaultLayout || _D7_DEFAULT_LAYOUT;
 		_D7_DEFAULT_EXTENSION = opt.defaultExtension || _D7_DEFAULT_EXTENSION;
 
@@ -54,16 +54,30 @@ class D7App {
 			};
 		}
 
-		let entryUrl = opt.topPage;
-		if (window.location.pathname !== '/') entryUrl = window.location.href;
-		if (opt.topPageStart) entryUrl = opt.topPage;
-
-		this._entryPage = d7parseUrl(entryUrl);
-		history.replaceState({ path: this._entryPage.path, query: this._entryPage.query}, 'tital', D7Util.stringifyUrl(this._entryPage.path, this._entryPage.query));
+		this._topPage = opt.topPage;
 	}
 
 	// on document load
 	start = async function() {
+		this._entryPage = d7parseUrl(window.location.href);
+		if (this._entryPage.path == '' || this._entryPage.path == '/'
+			|| this._entryPage.path.endsWith('index')
+			|| this._entryPage.path.endsWith('index' + _D7_DEFAULT_EXTENSION)
+		) {
+			this._entryPage = d7parseUrl(this._topPage);
+		}
+		try {
+			await D7Template.load(this._entryPage.path);
+		} catch (e) {
+			try {
+				_entryPage = d7parseUrl(opt.topPage);
+				await D7Template.load(_entryPage.path);
+			} catch (e) {
+				d7error('[ERROR] Wrong setting with top page or the page not exists.');
+			}
+		}
+		history.replaceState({ path: this._entryPage.path, query: this._entryPage.query}, 'title', D7Util.stringifyUrl(this._entryPage.path, this._entryPage.query));
+
 		for (const key in _D7_ROUTE_MAP) {
 			if (!_D7_ROUTE_MAP[key].preload) continue;
 			await D7Template.load(_D7_ROUTE_MAP[key].path);
@@ -428,26 +442,16 @@ class D7Template {
 			this.fnUserScript = new AsyncFunction("query", "d7", scriptCode);
 		}
 		this.fnBindEvent = function(targetDom, d7Owner) {
-			targetDom.querySelectorAll("[_d7bind]").forEach(function(ele) {
-				for (let idx=0; idx<ele.attributes.length;idx++) {
-					let node = ele.attributes[idx];
-					if (!node.name?.startsWith('_d7event')) continue;
-					const expr = node.value;
-					const pos = expr.indexOf(',');
-					if (pos < 1) continue;
-
-					const eventName = expr.substring(0, pos).trim();
-					const eventLogic = expr.substring(pos+1).trim();
-					const eventFunc = function(e) {new Function("e", "d7", eventLogic)(e, d7Owner);}
-					if (eventName === 'init') {
-						try {eventFunc(null);}
-						catch(ex) {d7error('Maybe caused by { ' + eventLogic + ' } defined after d7.init(). ');}
-					} else {
-						ele.addEventListener(eventName, eventFunc);
-					}
-					//ele.removeAttribute(node.name);
-				}
-				ele.removeAttribute("_d7bind");
+			targetDom.querySelectorAll("[_d7event]").forEach(function(ele) {
+				const expr = ele.getAttribute("_d7event");
+				const pos = expr.indexOf(',');
+				if (pos < 1) return;
+				const eventName = expr.substring(0, pos).trim();
+				const eventLogic = expr.substring(pos+1).trim();
+				//const eventFunc = function(e) {const d7=d7Owner; eval(eventLogic);}
+				const eventFunc = function(e) {new Function("e", "d7", eventLogic)(e, d7Owner);}
+				ele.addEventListener(eventName, eventFunc);
+				//ele.removeAttribute("_d7event");
 			});
 		};
 
@@ -457,7 +461,7 @@ class D7Template {
 	}
 
 	static load = async function(path) {
-		path = _D7_BASE_URL + path;
+		path = _D7_BASE_URI + path;
 		if (!path.match(/\.\w+$/)) path = path + _D7_DEFAULT_EXTENSION
 
 		let d7Template = _D7_CACHE_TPLT[path];
@@ -543,18 +547,17 @@ const d7escapeReg = function(str) {
  *******************************/
 const _D7_NL_REG_START = new RegExp(`(<!\\-\\-\\s*)?(${d7escapeReg(_D7_LOGIC.start)})`, 'gm');
 const _D7_NL_REG_CLOSE = new RegExp(`(${d7escapeReg(_D7_LOGIC.close)})(\\s*\\-\\->)?`, 'gm');
-const _D7_NL_REG_EVENT = new RegExp(`\\s(oninit|onclick|ondblclick|onmousedown|onmouseup|onmouseover|onmousemove|onmouseout|onkeypress|onkeydown|onkeyup|onload|onunload|onfocus|onblur|onsubmit|onreset|onselect|onchange)=("|')`, 'igm');
+const _D7_NL_REG_EVENT = new RegExp(`\\s(onclick|ondblclick|onmousedown|onmouseup|onmouseover|onmousemove|onmouseout|onkeypress|onkeydown|onkeyup|onload|onunload|onfocus|onblur|onsubmit|onreset|onselect|onchange)=("|')`, 'igm');
 const d7analyze = function(htmlText) {
 	let firstTag = htmlText.match(/<\w+>/)
 	if (firstTag) firstTag = firstTag[0]
 	else firstTag = 'div'
 	var divTemp = d7makeContainer(firstTag);
 
-	let bindIdx=0;
 	// {% xxx %} normalize to <!-- {% xxx %} -->
 	htmlText = htmlText.replace(_D7_NL_REG_START, function (m, cmtStart, start) {return "<!-- " + start;})
 	htmlText = htmlText.replace(_D7_NL_REG_CLOSE, function (m, close, cmtClose) {return close + " -->";})
-	htmlText = htmlText.replace(_D7_NL_REG_EVENT, function (m, eventName, quot) {return ' _d7bind _d7event' + bindIdx++ + '=' + quot + eventName.substring(2) + ',';})
+	htmlText = htmlText.replace(_D7_NL_REG_EVENT, function (m, eventName, quot) {return ' _d7event=' + quot + eventName.substring(2) + ',';})
 	divTemp.innerHTML = htmlText;
 	var layoutExpr = "";
 	var scriptCode = "";
