@@ -452,12 +452,15 @@ class D7Template {
 				let paramStr = "";
 				const jsonStr = expr.substring(pos2+1);
 				let p = JSON.parse(jsonStr);
+				let needParam = false;
 				for(var idx=0; idx < p.length; idx++) {
 					if (p[idx] === '_d7e') { paramStr += ',e'; continue;}
 					paramStr += ',p[' + idx + ']';
+					needParam = true;
 				}
 
-				let eventLogic = "let p = JSON.parse(`"+ jsonStr +"`);";
+				let eventLogic = "";
+				if (needParam) eventLogic = "let p = JSON.parse(`"+ jsonStr +"`);";
 				eventLogic += eventCall + '(' + paramStr.substring(1) + ');';
 
 				const eventFunc = function(e) {new Function("e", "d7", eventLogic)(e, d7Owner);}
