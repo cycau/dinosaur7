@@ -446,9 +446,19 @@ class D7Template {
 				const expr = ele.getAttribute("_d7event");
 				const pos = expr.indexOf(',');
 				if (pos < 1) return;
-				const eventName = expr.substring(0, pos).trim();
-				const eventLogic = expr.substring(pos+1).trim();
-				//const eventFunc = function(e) {const d7=d7Owner; eval(eventLogic);}
+				const eventName = expr.substring(0, pos);
+				const eventCall = expr.substring(pos+1);
+
+				let paramStr = "";
+				let p = JSON.parse(ele.getAttribute('_d7event_' + eventName));
+				for(var idx=0; idx < p.length; idx++) {
+					if (p[idx] === '_d7e') { paramStr += ',e'; continue;}
+					paramStr += ',p[' + idx + ']';
+				}
+
+				let eventLogic = "let p = JSON.parse(this.getAttribute('_d7event_" + eventName + "'));";
+				eventLogic += eventCall + '(' + paramStr.substring(1) + ');';
+
 				const eventFunc = function(e) {new Function("e", "d7", eventLogic)(e, d7Owner);}
 				ele.addEventListener(eventName, eventFunc);
 				//ele.removeAttribute("_d7event");
@@ -547,7 +557,7 @@ const d7escapeReg = function(str) {
  *******************************/
 const _D7_NL_REG_START = new RegExp(`(<!\\-\\-\\s*)?(${d7escapeReg(_D7_LOGIC.start)})`, 'gm');
 const _D7_NL_REG_CLOSE = new RegExp(`(${d7escapeReg(_D7_LOGIC.close)})(\\s*\\-\\->)?`, 'gm');
-const _D7_NL_REG_EVENT = new RegExp(`\\s(onclick|ondblclick|onmousedown|onmouseup|onmouseover|onmousemove|onmouseout|onkeypress|onkeydown|onkeyup|onload|onunload|onfocus|onblur|onsubmit|onreset|onselect|onchange)=("|')`, 'igm');
+const _D7_NL_REG_EVENT = new RegExp(`\\son(click|dblclick|mousedown|mouseup|mouseover|mousemove|mouseout|keypress|keydown|keyup|load|unload|focus|blur|submit|reset|select|change)=("|')`, 'igm');
 const d7analyze = function(htmlText) {
 	let firstTag = htmlText.match(/<\w+>/)
 	if (firstTag) firstTag = firstTag[0]
@@ -557,7 +567,7 @@ const d7analyze = function(htmlText) {
 	// {% xxx %} normalize to <!-- {% xxx %} -->
 	htmlText = htmlText.replace(_D7_NL_REG_START, function (m, cmtStart, start) {return "<!-- " + start;})
 	htmlText = htmlText.replace(_D7_NL_REG_CLOSE, function (m, close, cmtClose) {return close + " -->";})
-	htmlText = htmlText.replace(_D7_NL_REG_EVENT, function (m, eventName, quot) {return ' _d7event=' + quot + eventName.substring(2) + ',';})
+	htmlText = htmlText.replace(_D7_NL_REG_EVENT, function (m, eventName, quot) {return ' _d7event=' + quot + eventName + ',';})
 	divTemp.innerHTML = htmlText;
 	var layoutExpr = "";
 	var scriptCode = "";
@@ -656,6 +666,18 @@ const d7prepareHtml = function(targetDom) {
 		}
 		d7error(`d7scanHtml: Not a legal [d7] expression: ${d7expr}`);
 	});
+
+	// _d7event="click,obj.x(a,b,c)"
+	// _d7event="click,obj.x" _d7event_click="{% JSON.stringify([a,b,c]) %}"
+	targetDom.querySelectorAll("[_d7event]").forEach(function(d7Tag) {
+		let eventExpr = d7Tag.getAttribute('_d7event');
+		let posStart = eventExpr.indexOf("(");
+		let posEnd   = eventExpr.lastIndexOf(")");
+		let paramStr = eventExpr.substring(posStart+1, posEnd).trim();
+		paramStr = paramStr.replace(/(^|,)(\s*e\s*)(,|$)/, function (m, c1, e, c2) {return c1 + "'_d7e'" + c2;})
+		d7Tag.setAttribute('_d7event', eventExpr.substring(0, posStart));
+		d7Tag.setAttribute('_d7event_' + eventExpr.substring(0, eventExpr.indexOf(',')), '{% JSON.stringify([' + paramStr + ']) %}');
+	}
 
 	let strHtml = targetDom.innerHTML;
 	for (logicKey in logicPool) {
