@@ -444,19 +444,20 @@ class D7Template {
 		this.fnBindEvent = function(targetDom, d7Owner) {
 			targetDom.querySelectorAll("[_d7event]").forEach(function(ele) {
 				const expr = ele.getAttribute("_d7event");
-				const pos = expr.indexOf(',');
-				if (pos < 1) return;
-				const eventName = expr.substring(0, pos);
-				const eventCall = expr.substring(pos+1);
+				const pos1 = expr.indexOf(',');
+				const pos2 = expr.indexOf(',', pos1+1);
+				const eventName = expr.substring(0, pos1);
+				const eventCall = expr.substring(pos1+1, pos2);
 
 				let paramStr = "";
-				let p = JSON.parse(ele.getAttribute('_d7event_' + eventName));
+				const jsonStr = expr.substring(pos2+1);
+				let p = JSON.parse(jsonStr);
 				for(var idx=0; idx < p.length; idx++) {
 					if (p[idx] === '_d7e') { paramStr += ',e'; continue;}
 					paramStr += ',p[' + idx + ']';
 				}
 
-				let eventLogic = "let p = JSON.parse(this.getAttribute('_d7event_" + eventName + "'));";
+				let eventLogic = "let p = JSON.parse(`"+ jsonStr +"`);";
 				eventLogic += eventCall + '(' + paramStr.substring(1) + ');';
 
 				const eventFunc = function(e) {new Function("e", "d7", eventLogic)(e, d7Owner);}
@@ -668,15 +669,14 @@ const d7prepareHtml = function(targetDom) {
 	});
 
 	// _d7event="click,obj.x(a,b,c)"
-	// _d7event="click,obj.x" _d7event_click="{% JSON.stringify([a,b,c]) %}"
+	// _d7event="click,obj.x,{% D7Util.encodeHtml(JSON.stringify([a,b,c])) %}"
 	targetDom.querySelectorAll("[_d7event]").forEach(function(d7Tag) {
-		let eventExpr = d7Tag.getAttribute('_d7event');
-		let posStart = eventExpr.indexOf("(");
-		let posEnd   = eventExpr.lastIndexOf(")");
-		let paramStr = eventExpr.substring(posStart+1, posEnd).trim();
+		let expr = d7Tag.getAttribute('_d7event');
+		let posStart = expr.indexOf("(");
+		let posEnd   = expr.lastIndexOf(")");
+		let paramStr = expr.substring(posStart+1, posEnd);
 		paramStr = paramStr.replace(/(^|,)(\s*e\s*)(,|$)/, function (m, c1, e, c2) {return c1 + "'_d7e'" + c2;})
-		d7Tag.setAttribute('_d7event', eventExpr.substring(0, posStart));
-		d7Tag.setAttribute('_d7event_' + eventExpr.substring(0, eventExpr.indexOf(',')), '{% JSON.stringify([' + paramStr + ']) %}');
+		d7Tag.setAttribute('_d7event', expr.substring(0, posStart) + ',{% _NEED_descape_D7Util.encodeHtml(JSON.stringify([' + paramStr + '])) %}');
 	}
 
 	let strHtml = targetDom.innerHTML;
