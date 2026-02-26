@@ -1,6 +1,7 @@
 # Dinosaur7
 
-@keyword React Vue Angular simple pure html client  
+より詳しい情報はこちらへ [https://cycau.com](https://cycau.com/)
+
 You will be freed from complicated configurations and concepts of current front-end technology.  
 Look at the sample folder first. It works in both SPA mode and legacy mode.  
 
