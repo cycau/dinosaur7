@@ -1,6 +1,6 @@
 # Dinosaur7
 
-より詳しい情報はこちらへ [https://cycau.com](https://cycau.com/)
+より詳しい情報はこちらへ [https://www.cycau.com](https://www.cycau.com/)
 
 You will be freed from complicated configurations and concepts of current front-end technology.  
 Look at the sample folder first. It works in both SPA mode and legacy mode.  
